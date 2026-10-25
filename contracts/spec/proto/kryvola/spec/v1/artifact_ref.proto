@@ -1,0 +1,15 @@
+// Generated wire projection preview. Do not edit.
+syntax = "proto3";
+
+package kryvola.spec.v1;
+
+// ArtifactRef contains metadata only; possession does not grant access.
+message ArtifactRef {
+  string opaque_artifact_id = 1;
+  string tenant_scope = 2;
+  string immutable_version = 3;
+  string manifest_digest = 4;
+  string byte_length = 5;
+  string media_type = 6;
+  string schema_version = 7;
+}
