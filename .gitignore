@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.venv/
+.cache/
+.ruff_cache/
+.ty_cache/
+target/
+build/
+dist/
+.env
+.env.*
+!.env.example

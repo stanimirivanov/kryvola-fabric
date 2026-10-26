@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "enum": [
+        "1"
+      ]
+    },
+    "stage": {
+      "type": "string",
+      "enum": [
+        "foundation"
+      ]
+    },
+    "production_ready": {
+      "type": "boolean",
+      "enum": [
+        false
+      ]
+    },
+    "profiles": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "profile_id": {
+            "type": "string",
+            "enum": [
+              "FHE-Q1"
+            ]
+          },
+          "enabled": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "qualification": {
+            "type": "string",
+            "enum": [
+              "unqualified"
+            ]
+          }
+        },
+        "required": [
+          "profile_id",
+          "enabled",
+          "qualification"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "maxItems": 1
+    }
+  },
+  "required": [
+    "schema_version",
+    "stage",
+    "production_ready",
+    "profiles"
+  ],
+  "additionalProperties": false
+}

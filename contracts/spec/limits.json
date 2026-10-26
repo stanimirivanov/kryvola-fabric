@@ -1,0 +1,8 @@
+{
+  "control_bytes": "65536",
+  "temporal_payload_bytes": "32768",
+  "temporal_call_bytes": "131072",
+  "chunk_default_bytes": "1048576",
+  "chunk_max_bytes": "4194304",
+  "artifact_max_bytes": "1073741824"
+}

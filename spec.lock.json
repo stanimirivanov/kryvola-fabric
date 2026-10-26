@@ -1,0 +1,7 @@
+{
+  "repository": "https://github.com/stanimirivanov/kryvola-spec",
+  "revision": "647986b9ba9cb2c6d3b853046272e3869b6fea5e",
+  "contract_version": "0.1.0-preview.1",
+  "artifact_root": "contracts/spec",
+  "manifest_sha256": "aab89621fb800639374ef1eb1c25e27d30daa0f7b6efd0a96ad73ec792cd2d36"
+}

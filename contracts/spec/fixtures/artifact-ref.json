@@ -1,0 +1,9 @@
+{
+  "opaque_artifact_id": "artifact-fixture-1",
+  "tenant_scope": "tenant-fixture",
+  "immutable_version": "version-1",
+  "manifest_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "byte_length": "1048576",
+  "media_type": "application/vnd.kryvola.tfhe-ciphertext",
+  "schema_version": "1"
+}

@@ -1,0 +1,28 @@
+{
+  "contract_version": "0.1.0-preview.1",
+  "status": "preview",
+  "hash_purpose": "SHA-256 build provenance; protocol commitments remain BLAKE3",
+  "toolchain": {
+    "effect": "4.0.6",
+    "typescript": "7.0.2",
+    "package_manager": "pnpm@12.5.1"
+  },
+  "sources": {
+    "src/index.ts": "2f6d3a27788112e5fda745d57aedf06ab8813f54125a63e4c0b4d7b5d15b3bb6",
+    "tools/generate.mjs": "346620894132428279068548012589f8abd13647479e9def18b73b9151005e62",
+    "tools/check-architecture.mjs": "0234d21835ce7da33ab847a69b47ab6efebe2f2005a1fff94630c8a4501856ba"
+  },
+  "files": {
+    "artifact-ref.schema.json": "d8cdb71f7b06114cf4fac231a1363069e96d42b95b6b36e294b80c37817bbb8e",
+    "foundation-inventory.schema.json": "56e8d97aa1cf0fe8b50a658848d0049f1e19c90bbb7ab6f4baf3a22329de84ef",
+    "fixtures/artifact-ref.json": "2ca34ea7b98553d569fddb58d34aea995c83209e6c5488447de01e4c3f1ad01b",
+    "limits.json": "f3ec6ba6ff3ff3bba649716cf0f1aaee799e467266d68552929fb6a877761ff7",
+    "python/artifact_ref.py": "e0502938aac8e28001fb4bb8446c5139dfd9940e35cda2becb3c0cf17c81bcbe",
+    "rust/artifact_ref.rs": "ffbf88105a08360f46423e6c95b23e2fe279389899ad12c5006b3a3b0620bab3",
+    "cpp/artifact_ref.hpp": "8e5c65eda112bef14b60a9b08bcfb935c00dcf31ad6e64dd49b5ada46e78a1f6",
+    "proto/kryvola/spec/v1/artifact_ref.proto": "e19083c4129724d62dbc02419af43d3f0322a18b659517aef744de7ff0fed6af",
+    "rust/limits.rs": "50fae4630da3ba59a3e9cc30f774a2fc03389269fb8a019e320cde9f995a5eb1",
+    "python/limits.py": "36d64b29f10451b0f1c4061c66124ecfa70833adb950cf6f095de12865a02d1b",
+    "cpp/limits.hpp": "2ae45e887c9edc5236972ea9e334bb0e3cb4fbd72498f1594dd6485f93678670"
+  }
+}
