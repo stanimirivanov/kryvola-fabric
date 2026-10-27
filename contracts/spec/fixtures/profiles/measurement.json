@@ -1,0 +1,172 @@
+{
+  "schema_version": "1",
+  "measurement_id": "synthetic-report",
+  "origin": "SYNTHETIC_FIXTURE",
+  "workload": {
+    "profile_id": "FHE-Q1",
+    "profile_version": "1",
+    "parameter_set_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "model_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "program_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "engine_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "dataset_snapshot_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "arithmetic": "EXACT_MODULAR",
+    "precision": {
+      "dtype": "uint8",
+      "fractional_bits": "0",
+      "overflow": "WRAP"
+    },
+    "operators": [
+      "ADD"
+    ],
+    "input_shape": [
+      "2"
+    ],
+    "output_shape": [
+      "2"
+    ]
+  },
+  "model_descriptor_sha256": "38480cf4296e5a3c13d2ba4bd2c56719c2426f75f27f27e7faa97b4f5ff809ac",
+  "contract_version": "0.1.0-preview.10",
+  "schema_source_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "software": [
+    {
+      "name": "tfhe-rs",
+      "version": "0.0.0-synthetic",
+      "source_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "artifact_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    {
+      "name": "benchmark-harness",
+      "version": "0.0.0-synthetic",
+      "source_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "artifact_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    {
+      "name": "engine-image",
+      "version": "0.0.0-synthetic",
+      "source_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "artifact_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }
+  ],
+  "features": [
+    "synthetic"
+  ],
+  "evidence": {
+    "policy_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "policy": "NONE",
+    "relations": []
+  },
+  "hardware": {
+    "cpu_model": "synthetic CPU",
+    "cpu_cores": "2",
+    "ram_bytes": "1073741824",
+    "os_kernel": "synthetic-kernel",
+    "accelerators": []
+  },
+  "network": {
+    "rtt_ns": "1000000",
+    "bandwidth_bytes_per_second": "125000000",
+    "loss_parts_per_million": "0"
+  },
+  "concurrency": "1",
+  "cache_state": "COLD",
+  "warmup_samples": "0",
+  "requested_samples": "3",
+  "successful_samples": "2",
+  "failed_samples": "1",
+  "elapsed_ns": "1000000000",
+  "failures": [
+    {
+      "code": "SYNTHETIC_FAILURE",
+      "count": "1"
+    }
+  ],
+  "latency_ns": {
+    "upload": {
+      "p50": "10",
+      "p95": "30",
+      "p99": "30"
+    },
+    "manifest_verify": {
+      "p50": "10",
+      "p95": "30",
+      "p99": "30"
+    },
+    "key_load": {
+      "p50": "10",
+      "p95": "30",
+      "p99": "30"
+    },
+    "queue": {
+      "p50": "10",
+      "p95": "30",
+      "p99": "30"
+    },
+    "transfer": {
+      "p50": "10",
+      "p95": "30",
+      "p99": "30"
+    },
+    "decode": {
+      "p50": "10",
+      "p95": "30",
+      "p99": "30"
+    },
+    "expand": {
+      "p50": "10",
+      "p95": "30",
+      "p99": "30"
+    },
+    "evaluate": {
+      "p50": "10",
+      "p95": "30",
+      "p99": "30"
+    },
+    "bootstrap": {
+      "p50": "10",
+      "p95": "30",
+      "p99": "30"
+    },
+    "download": {
+      "p50": "10",
+      "p95": "30",
+      "p99": "30"
+    },
+    "owner_decrypt": {
+      "p50": "10",
+      "p95": "30",
+      "p99": "30"
+    },
+    "end_to_end": {
+      "p50": "10",
+      "p95": "30",
+      "p99": "30"
+    },
+    "proof_queue": {
+      "p50": "0",
+      "p95": "0",
+      "p99": "0"
+    },
+    "prove": {
+      "p50": "0",
+      "p95": "0",
+      "p99": "0"
+    },
+    "verify": {
+      "p50": "0",
+      "p95": "0",
+      "p99": "0"
+    }
+  },
+  "throughput_microrequests_per_second": "2000000",
+  "resources": {
+    "serialized_bytes": "100",
+    "expanded_bytes": "200",
+    "evaluation_key_bytes": "300",
+    "peak_rss_bytes": "1000",
+    "peak_vram_bytes": "0"
+  },
+  "numerical_mismatches": "0",
+  "total_cost_usd_microunits": "0"
+}

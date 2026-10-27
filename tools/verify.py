@@ -37,6 +37,7 @@ def main() -> None:
             run("ctest", "--test-dir", "build/cpp", "--output-on-failure")
         else:
             run("uv", "build", "--no-build-isolation", "--wheel")
+            run(sys.executable, "tools/check_wheel.py")
 
 
 if __name__ == "__main__":

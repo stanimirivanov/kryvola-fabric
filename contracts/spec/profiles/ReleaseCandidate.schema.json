@@ -1,0 +1,424 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "enum": [
+        "1"
+      ]
+    },
+    "stage": {
+      "type": "string",
+      "enum": [
+        "M0_CONTRACT_CANDIDATE"
+      ]
+    },
+    "production_ready": {
+      "type": "boolean",
+      "enum": [
+        false
+      ]
+    },
+    "profile_enabled": {
+      "type": "boolean",
+      "enum": [
+        false
+      ]
+    },
+    "qualification": {
+      "type": "string",
+      "enum": [
+        "UNQUALIFIED"
+      ]
+    },
+    "schema_source_revision": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}(?![\\s\\S])"
+    },
+    "ratification_revision": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}(?![\\s\\S])"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "contract_version": {
+      "type": "string",
+      "pattern": "^[0-9]{1,6}\\.[0-9]{1,6}\\.[0-9]{1,6}(?:-[a-zA-Z0-9.-]{1,64})?(?![\\s\\S])"
+    },
+    "bundle_manifest_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+    },
+    "workload": {
+      "type": "object",
+      "properties": {
+        "profile_id": {
+          "type": "string",
+          "enum": [
+            "FHE-Q1"
+          ]
+        },
+        "profile_version": {
+          "type": "string",
+          "enum": [
+            "1"
+          ]
+        },
+        "parameter_set_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+        },
+        "model_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+        },
+        "program_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+        },
+        "engine_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+        },
+        "dataset_snapshot_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+        },
+        "arithmetic": {
+          "type": "string",
+          "enum": [
+            "EXACT_MODULAR"
+          ]
+        },
+        "precision": {
+          "type": "object",
+          "properties": {
+            "dtype": {
+              "type": "string",
+              "enum": [
+                "uint8",
+                "uint16",
+                "uint32",
+                "uint64"
+              ]
+            },
+            "fractional_bits": {
+              "type": "string",
+              "enum": [
+                "0"
+              ]
+            },
+            "overflow": {
+              "type": "string",
+              "enum": [
+                "WRAP"
+              ]
+            }
+          },
+          "required": [
+            "dtype",
+            "fractional_bits",
+            "overflow"
+          ],
+          "additionalProperties": false
+        },
+        "operators": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "ADD",
+              "MUL"
+            ]
+          },
+          "minItems": 1,
+          "maxItems": 2
+        },
+        "input_shape": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,8}(?![\\s\\S])"
+          },
+          "minItems": 1,
+          "maxItems": 8
+        },
+        "output_shape": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,8}(?![\\s\\S])"
+          },
+          "minItems": 1,
+          "maxItems": 8
+        }
+      },
+      "required": [
+        "profile_id",
+        "profile_version",
+        "parameter_set_digest",
+        "model_digest",
+        "program_digest",
+        "engine_digest",
+        "dataset_snapshot_digest",
+        "arithmetic",
+        "precision",
+        "operators",
+        "input_shape",
+        "output_shape"
+      ],
+      "additionalProperties": false
+    },
+    "evidence": {
+      "type": "object",
+      "properties": {
+        "policy_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+        },
+        "policy": {
+          "type": "string",
+          "enum": [
+            "NONE",
+            "OPTIONAL_LATER",
+            "REQUIRED_BEFORE_RELEASE"
+          ]
+        },
+        "relations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "TFHE_COMPACT_INPUT",
+              "PUBLIC_METADATA_COMMITMENT"
+            ]
+          },
+          "minItems": 0,
+          "maxItems": 2
+        }
+      },
+      "required": [
+        "policy_digest",
+        "policy",
+        "relations"
+      ],
+      "additionalProperties": false
+    },
+    "model_descriptor_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+    },
+    "measurement_report_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+    },
+    "components": {
+      "type": "object",
+      "properties": {
+        "spec": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}(?![\\s\\S])"
+            },
+            "version": {
+              "type": "string",
+              "pattern": "^[0-9]{1,6}\\.[0-9]{1,6}\\.[0-9]{1,6}(?:-[a-zA-Z0-9.-]{1,64})?(?![\\s\\S])"
+            },
+            "source_revision": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}(?![\\s\\S])"
+            },
+            "artifact_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+            }
+          },
+          "required": [
+            "name",
+            "version",
+            "source_revision",
+            "artifact_sha256"
+          ],
+          "additionalProperties": false
+        },
+        "fabric": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}(?![\\s\\S])"
+            },
+            "version": {
+              "type": "string",
+              "pattern": "^[0-9]{1,6}\\.[0-9]{1,6}\\.[0-9]{1,6}(?:-[a-zA-Z0-9.-]{1,64})?(?![\\s\\S])"
+            },
+            "source_revision": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}(?![\\s\\S])"
+            },
+            "artifact_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+            }
+          },
+          "required": [
+            "name",
+            "version",
+            "source_revision",
+            "artifact_sha256"
+          ],
+          "additionalProperties": false
+        },
+        "engines": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}(?![\\s\\S])"
+            },
+            "version": {
+              "type": "string",
+              "pattern": "^[0-9]{1,6}\\.[0-9]{1,6}\\.[0-9]{1,6}(?:-[a-zA-Z0-9.-]{1,64})?(?![\\s\\S])"
+            },
+            "source_revision": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}(?![\\s\\S])"
+            },
+            "artifact_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+            }
+          },
+          "required": [
+            "name",
+            "version",
+            "source_revision",
+            "artifact_sha256"
+          ],
+          "additionalProperties": false
+        },
+        "ml": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}(?![\\s\\S])"
+            },
+            "version": {
+              "type": "string",
+              "pattern": "^[0-9]{1,6}\\.[0-9]{1,6}\\.[0-9]{1,6}(?:-[a-zA-Z0-9.-]{1,64})?(?![\\s\\S])"
+            },
+            "source_revision": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}(?![\\s\\S])"
+            },
+            "artifact_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+            }
+          },
+          "required": [
+            "name",
+            "version",
+            "source_revision",
+            "artifact_sha256"
+          ],
+          "additionalProperties": false
+        },
+        "platform": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}(?![\\s\\S])"
+            },
+            "version": {
+              "type": "string",
+              "pattern": "^[0-9]{1,6}\\.[0-9]{1,6}\\.[0-9]{1,6}(?:-[a-zA-Z0-9.-]{1,64})?(?![\\s\\S])"
+            },
+            "source_revision": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}(?![\\s\\S])"
+            },
+            "artifact_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+            }
+          },
+          "required": [
+            "name",
+            "version",
+            "source_revision",
+            "artifact_sha256"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "spec",
+        "fabric",
+        "engines",
+        "ml",
+        "platform"
+      ],
+      "additionalProperties": false
+    },
+    "legal": {
+      "type": "object",
+      "properties": {
+        "disposition": {
+          "type": "string",
+          "enum": [
+            "UNRESOLVED",
+            "BLOCKED",
+            "REVIEWED_ALLOWED"
+          ]
+        },
+        "intended_use": {
+          "type": "string",
+          "pattern": "^[^\\u0000-\\u001f]{1,256}(?![\\s\\S])"
+        },
+        "evidence_sha256": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+          },
+          "maxItems": 8
+        }
+      },
+      "required": [
+        "disposition",
+        "intended_use",
+        "evidence_sha256"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema_version",
+    "stage",
+    "production_ready",
+    "profile_enabled",
+    "qualification",
+    "schema_source_revision",
+    "ratification_revision",
+    "contract_version",
+    "bundle_manifest_sha256",
+    "workload",
+    "evidence",
+    "model_descriptor_sha256",
+    "measurement_report_sha256",
+    "components",
+    "legal"
+  ],
+  "additionalProperties": false
+}

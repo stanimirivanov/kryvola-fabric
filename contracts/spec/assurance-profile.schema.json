@@ -1,0 +1,214 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "profile_id": {
+      "type": "string",
+      "enum": [
+        "FHE-Q1"
+      ]
+    },
+    "profile_version": {
+      "type": "string",
+      "enum": [
+        "1"
+      ]
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "review_status": {
+      "type": "string",
+      "enum": [
+        "UNREVIEWED",
+        "REVIEWED"
+      ]
+    },
+    "review_evidence": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}(?![\\s\\S])"
+      },
+      "maxItems": 8
+    },
+    "legal_disposition_id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}(?![\\s\\S])"
+    },
+    "parameter_profile_id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}(?![\\s\\S])"
+    },
+    "ownership_model": {
+      "type": "string",
+      "enum": [
+        "SINGLE_OWNER"
+      ]
+    },
+    "claims": {
+      "type": "object",
+      "properties": {
+        "input_confidentiality": {
+          "type": "string",
+          "enum": [
+            "OWNER_KEY_ENCRYPTION"
+          ]
+        },
+        "computation_integrity": {
+          "type": "string",
+          "enum": [
+            "UNPROVEN"
+          ]
+        },
+        "input_validity": {
+          "type": "string",
+          "enum": [
+            "NOT_ESTABLISHED"
+          ]
+        },
+        "model_visibility": {
+          "type": "string",
+          "enum": [
+            "PUBLIC"
+          ]
+        },
+        "output_privacy": {
+          "type": "string",
+          "enum": [
+            "ENCRYPTED_TO_OWNER"
+          ]
+        },
+        "witness_privacy": {
+          "type": "string",
+          "enum": [
+            "PUBLIC_DATA_ONLY"
+          ]
+        },
+        "availability": {
+          "type": "string",
+          "enum": [
+            "BEST_EFFORT"
+          ]
+        }
+      },
+      "required": [
+        "input_confidentiality",
+        "computation_integrity",
+        "input_validity",
+        "model_visibility",
+        "output_privacy",
+        "witness_privacy",
+        "availability"
+      ],
+      "additionalProperties": false
+    },
+    "assumptions": {
+      "type": "object",
+      "properties": {
+        "owner_endpoint_trusted": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "control_plane_release_trusted": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "parameter_review_required": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "tenant_isolation_required": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "residual_side_channels": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "owner_compromise_excluded": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        }
+      },
+      "required": [
+        "owner_endpoint_trusted",
+        "control_plane_release_trusted",
+        "parameter_review_required",
+        "tenant_isolation_required",
+        "residual_side_channels",
+        "owner_compromise_excluded"
+      ],
+      "additionalProperties": false
+    },
+    "metadata_leakage": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "INPUT_SHAPE",
+          "MODEL_PROGRAM",
+          "CRYPTO_PAYLOAD_SIZE",
+          "TIMING",
+          "ACCESS_PATTERN",
+          "KEY_REUSE",
+          "CACHE_STATE"
+        ]
+      },
+      "maxItems": 7,
+      "minItems": 7
+    },
+    "private_key_custody": {
+      "type": "string",
+      "enum": [
+        "OWNER_ONLY"
+      ]
+    },
+    "release_authority": {
+      "type": "string",
+      "enum": [
+        "TEMPORAL_WORKFLOW"
+      ]
+    },
+    "allowed_proof_relations": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "TFHE_COMPACT_INPUT",
+          "PUBLIC_METADATA_COMMITMENT"
+        ]
+      },
+      "maxItems": 2
+    }
+  },
+  "required": [
+    "profile_id",
+    "profile_version",
+    "enabled",
+    "review_status",
+    "review_evidence",
+    "legal_disposition_id",
+    "parameter_profile_id",
+    "ownership_model",
+    "claims",
+    "assumptions",
+    "metadata_leakage",
+    "private_key_custody",
+    "release_authority",
+    "allowed_proof_relations"
+  ],
+  "additionalProperties": false
+}

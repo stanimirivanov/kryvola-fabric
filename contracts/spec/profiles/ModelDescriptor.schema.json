@@ -1,0 +1,186 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "enum": [
+        "1"
+      ]
+    },
+    "model_version": {
+      "type": "string",
+      "pattern": "^[0-9]{1,6}\\.[0-9]{1,6}\\.[0-9]{1,6}(?:-[a-zA-Z0-9.-]{1,64})?(?![\\s\\S])"
+    },
+    "workload": {
+      "type": "object",
+      "properties": {
+        "profile_id": {
+          "type": "string",
+          "enum": [
+            "FHE-Q1"
+          ]
+        },
+        "profile_version": {
+          "type": "string",
+          "enum": [
+            "1"
+          ]
+        },
+        "parameter_set_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+        },
+        "model_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+        },
+        "program_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+        },
+        "engine_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+        },
+        "dataset_snapshot_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+        },
+        "arithmetic": {
+          "type": "string",
+          "enum": [
+            "EXACT_MODULAR"
+          ]
+        },
+        "precision": {
+          "type": "object",
+          "properties": {
+            "dtype": {
+              "type": "string",
+              "enum": [
+                "uint8",
+                "uint16",
+                "uint32",
+                "uint64"
+              ]
+            },
+            "fractional_bits": {
+              "type": "string",
+              "enum": [
+                "0"
+              ]
+            },
+            "overflow": {
+              "type": "string",
+              "enum": [
+                "WRAP"
+              ]
+            }
+          },
+          "required": [
+            "dtype",
+            "fractional_bits",
+            "overflow"
+          ],
+          "additionalProperties": false
+        },
+        "operators": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "ADD",
+              "MUL"
+            ]
+          },
+          "minItems": 1,
+          "maxItems": 2
+        },
+        "input_shape": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,8}(?![\\s\\S])"
+          },
+          "minItems": 1,
+          "maxItems": 8
+        },
+        "output_shape": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,8}(?![\\s\\S])"
+          },
+          "minItems": 1,
+          "maxItems": 8
+        }
+      },
+      "required": [
+        "profile_id",
+        "profile_version",
+        "parameter_set_digest",
+        "model_digest",
+        "program_digest",
+        "engine_digest",
+        "dataset_snapshot_digest",
+        "arithmetic",
+        "precision",
+        "operators",
+        "input_shape",
+        "output_shape"
+      ],
+      "additionalProperties": false
+    },
+    "dataset_license": {
+      "type": "string",
+      "pattern": "^[^\\u0000-\\u001f]{1,256}(?![\\s\\S])"
+    },
+    "preprocessing_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+    },
+    "reference_program_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+    },
+    "dataset_split": {
+      "type": "string",
+      "enum": [
+        "TRAIN",
+        "VALIDATION",
+        "TEST",
+        "SYNTHETIC"
+      ]
+    },
+    "dataset_samples": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]{0,8}(?![\\s\\S])"
+    },
+    "numerical_error_budget": {
+      "type": "string",
+      "enum": [
+        "0"
+      ]
+    },
+    "model_visibility": {
+      "type": "string",
+      "enum": [
+        "PUBLIC"
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "model_version",
+    "workload",
+    "dataset_license",
+    "preprocessing_digest",
+    "reference_program_digest",
+    "dataset_split",
+    "dataset_samples",
+    "numerical_error_budget",
+    "model_visibility"
+  ],
+  "additionalProperties": false
+}

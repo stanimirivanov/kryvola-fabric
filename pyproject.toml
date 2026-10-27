@@ -4,7 +4,7 @@ version = "0.1.0.dev0"
 description = "Kryvola M0 foundation; no production execution capability"
 requires-python = ">=3.14,<3.15"
 license = "Apache-2.0"
-dependencies = []
+dependencies = ["protobuf==7.35.1", "jsonschema==4.26.0"]
 
 [dependency-groups]
 dev = ["ruff==0.17.2", "ty==0.0.91", "hatchling==1.32.4"]

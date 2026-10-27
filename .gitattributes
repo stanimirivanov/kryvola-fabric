@@ -1,1 +1,5 @@
 * text=auto eol=lf
+*.bin binary
+contracts/native/** whitespace=-blank-at-eof
+contracts/** linguist-generated=true
+src/kryvola_fabric/_spec/** linguist-generated=true

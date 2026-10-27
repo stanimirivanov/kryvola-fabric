@@ -1,0 +1,34 @@
+{
+  "profile_id": "FHE-Q1",
+  "profile_version": "1",
+  "requirements": {
+    "input_confidentiality": "OWNER_KEY_ENCRYPTION",
+    "computation_integrity": "UNPROVEN",
+    "input_validity": "NOT_ESTABLISHED",
+    "model_visibility": "PUBLIC",
+    "output_privacy": "ENCRYPTED_TO_OWNER",
+    "witness_privacy": "PUBLIC_DATA_ONLY",
+    "availability": "BEST_EFFORT"
+  },
+  "evidence_policy": "NONE",
+  "evidence_relations": [],
+  "consent": {
+    "profile_id": "FHE-Q1",
+    "profile_version": "1",
+    "model_visibility": "PUBLIC",
+    "computation_integrity": "UNPROVEN",
+    "owner_endpoint_trust": "REQUIRED",
+    "residual_side_channels": "NOT_ELIMINATED",
+    "owner_compromise": "OUT_OF_SCOPE",
+    "accepted_leakage": [
+      "INPUT_SHAPE",
+      "MODEL_PROGRAM",
+      "CRYPTO_PAYLOAD_SIZE",
+      "TIMING",
+      "ACCESS_PATTERN",
+      "KEY_REUSE",
+      "CACHE_STATE"
+    ],
+    "allow_unverified_release": true
+  }
+}

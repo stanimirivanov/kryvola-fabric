@@ -1,0 +1,192 @@
+{
+  "capabilities": {
+    "schema_version": "1",
+    "engine_digest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "parameter_set_digest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "security_profiles": [
+      "FHE-Q1"
+    ],
+    "program_digests": [
+      "1111111111111111111111111111111111111111111111111111111111111111"
+    ],
+    "operators": [
+      "ADD",
+      "MUL"
+    ],
+    "arithmetic": "EXACT_MODULAR",
+    "max_parallel_executions": "1"
+  },
+  "execute": {
+    "schema_version": "1",
+    "operation": {
+      "schema_version": "1",
+      "tenant_scope": "tenant-fixture",
+      "logical_job_id": "job-1",
+      "operation_id": "operation-1",
+      "workflow_epoch": "0",
+      "stage_id": "output",
+      "idempotency_key": "admission-1",
+      "policy_digest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "deadline_unix_ms": "1793059200000",
+      "plan_ref": {
+        "schema_version": "1",
+        "tenant_scope": "tenant-fixture",
+        "plan_id": "plan-1",
+        "immutable_version": "version-1",
+        "plan_digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "key_context_ref": {
+        "schema_version": "1",
+        "tenant_scope": "tenant-fixture",
+        "key_context_id": "key-context-1",
+        "immutable_version": "version-1",
+        "key_context_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "key_epoch": "0"
+      },
+      "disclosure_identity": {
+        "schema_version": "1",
+        "tenant_scope": "tenant-fixture",
+        "logical_job_id": "job-1",
+        "output_stage": "output",
+        "recipient": "owner-1",
+        "disclosure_index": "0"
+      }
+    },
+    "execution": {
+      "schema_version": "1",
+      "attempt": {
+        "schema_version": "1",
+        "tenant_scope": "tenant-fixture",
+        "operation_id": "operation-1",
+        "workflow_epoch": "0",
+        "attempt_epoch": "0",
+        "fence": "1"
+      },
+      "execution_id": "execution-1",
+      "session_epoch": "0",
+      "deadline_unix_ms": "1793059200000",
+      "physical_state": "CREATED"
+    },
+    "engine_digest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "parameter_set_digest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "program_digest": "1111111111111111111111111111111111111111111111111111111111111111",
+    "security_profile": "FHE-Q1",
+    "required_operators": [
+      "ADD"
+    ],
+    "input_refs": [
+      {
+        "opaque_artifact_id": "artifact-fixture-1",
+        "tenant_scope": "tenant-fixture",
+        "immutable_version": "version-1",
+        "manifest_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "byte_length": "1048576",
+        "media_type": "application/vnd.kryvola.tfhe-ciphertext",
+        "schema_version": "1"
+      }
+    ],
+    "output_contract_digest": "2222222222222222222222222222222222222222222222222222222222222222",
+    "resource_profile_digest": "3333333333333333333333333333333333333333333333333333333333333333"
+  },
+  "observation": {
+    "schema_version": "1",
+    "execution": {
+      "schema_version": "1",
+      "attempt": {
+        "schema_version": "1",
+        "tenant_scope": "tenant-fixture",
+        "operation_id": "operation-1",
+        "workflow_epoch": "0",
+        "attempt_epoch": "0",
+        "fence": "1"
+      },
+      "execution_id": "execution-1",
+      "session_epoch": "0",
+      "deadline_unix_ms": "1793059200000",
+      "physical_state": "SUCCEEDED"
+    },
+    "output_refs": [
+      {
+        "opaque_artifact_id": "output-candidate-1",
+        "tenant_scope": "tenant-fixture",
+        "immutable_version": "version-1",
+        "manifest_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "byte_length": "1048576",
+        "media_type": "application/vnd.kryvola.tfhe-ciphertext",
+        "schema_version": "1"
+      }
+    ],
+    "error_code": "NONE"
+  },
+  "event": {
+    "schema_version": "1",
+    "event_id": "event-1",
+    "causation_id": "dispatch-1",
+    "aggregate_sequence": "1",
+    "event_type": "EXECUTION_OBSERVED",
+    "operation": {
+      "schema_version": "1",
+      "tenant_scope": "tenant-fixture",
+      "logical_job_id": "job-1",
+      "operation_id": "operation-1",
+      "workflow_epoch": "0",
+      "stage_id": "output",
+      "idempotency_key": "admission-1",
+      "policy_digest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "deadline_unix_ms": "1793059200000",
+      "plan_ref": {
+        "schema_version": "1",
+        "tenant_scope": "tenant-fixture",
+        "plan_id": "plan-1",
+        "immutable_version": "version-1",
+        "plan_digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "key_context_ref": {
+        "schema_version": "1",
+        "tenant_scope": "tenant-fixture",
+        "key_context_id": "key-context-1",
+        "immutable_version": "version-1",
+        "key_context_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "key_epoch": "0"
+      },
+      "disclosure_identity": {
+        "schema_version": "1",
+        "tenant_scope": "tenant-fixture",
+        "logical_job_id": "job-1",
+        "output_stage": "output",
+        "recipient": "owner-1",
+        "disclosure_index": "0"
+      }
+    },
+    "observation": {
+      "schema_version": "1",
+      "execution": {
+        "schema_version": "1",
+        "attempt": {
+          "schema_version": "1",
+          "tenant_scope": "tenant-fixture",
+          "operation_id": "operation-1",
+          "workflow_epoch": "0",
+          "attempt_epoch": "0",
+          "fence": "1"
+        },
+        "execution_id": "execution-1",
+        "session_epoch": "0",
+        "deadline_unix_ms": "1793059200000",
+        "physical_state": "SUCCEEDED"
+      },
+      "output_refs": [
+        {
+          "opaque_artifact_id": "output-candidate-1",
+          "tenant_scope": "tenant-fixture",
+          "immutable_version": "version-1",
+          "manifest_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "byte_length": "1048576",
+          "media_type": "application/vnd.kryvola.tfhe-ciphertext",
+          "schema_version": "1"
+        }
+      ],
+      "error_code": "NONE"
+    }
+  }
+}

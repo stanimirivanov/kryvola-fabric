@@ -5,5 +5,14 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
+[dependencies]
+prost = "=0.14.4"
+prost-reflect = { version = "=0.16.5", features = ["serde"] }
+jsonschema = { version = "=0.60.1", default-features = false }
+serde_json = "=1.0.154"
+
+[dev-dependencies]
+hex = "=0.4.3"
+
 [lints]
 workspace = true

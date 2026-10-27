@@ -17,6 +17,8 @@ uv run --locked python -m kryvola_fabric
 
 No service credentials or local databases are required for this scope. `spec.lock.json` pins immutable generated spec artifacts; a sibling checkout is unnecessary. Generated structural types are not native decoders or authorization. [Architecture and enforcement](docs/architecture.md), [progress](docs/progress.md), and the source references below describe limits.
 
+M0-PR14 adds [strict Rust/Python control validation](docs/control-validation.md) over pinned Protobuf descriptors and schemas, with complete payload/Temporal-call budgets. The helpers grant no execution or disclosure rights. Before committing, apply formatting/lint fixes and check the full changed-file diff, including documentation; heavy checks may run on CI.
+
 ## Authoritative context
 
 - [Design v2](https://github.com/stanimirivanov/kryvola-spec/blob/647986b9ba9cb2c6d3b853046272e3869b6fea5e/docs/kryvola-design-v2.md)
