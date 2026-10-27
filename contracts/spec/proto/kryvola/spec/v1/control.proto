@@ -1,0 +1,63 @@
+// Generated structural preview; validate presence, constraints and context in application decoders.
+syntax = "proto3";
+
+package kryvola.spec.v1;
+
+message KeyContextRef {
+  optional string schema_version = 1;
+  optional string tenant_scope = 2;
+  optional string key_context_id = 3;
+  optional string immutable_version = 4;
+  optional string key_context_digest = 5;
+  optional string key_epoch = 6;
+}
+
+message PlanRef {
+  optional string schema_version = 1;
+  optional string tenant_scope = 2;
+  optional string plan_id = 3;
+  optional string immutable_version = 4;
+  optional string plan_digest = 5;
+}
+
+message DisclosureIdentity {
+  optional string schema_version = 1;
+  optional string tenant_scope = 2;
+  optional string logical_job_id = 3;
+  optional string output_stage = 4;
+  optional string recipient = 5;
+  optional string disclosure_index = 6;
+}
+
+message Operation {
+  optional string schema_version = 1;
+  optional string tenant_scope = 2;
+  optional string logical_job_id = 3;
+  optional string operation_id = 4;
+  optional string workflow_epoch = 5;
+  optional string stage_id = 6;
+  optional string idempotency_key = 7;
+  optional string policy_digest = 8;
+  optional string deadline_unix_ms = 9;
+  PlanRef plan_ref = 10;
+  KeyContextRef key_context_ref = 11;
+  DisclosureIdentity disclosure_identity = 12;
+}
+
+message Attempt {
+  optional string schema_version = 1;
+  optional string tenant_scope = 2;
+  optional string operation_id = 3;
+  optional string workflow_epoch = 4;
+  optional string attempt_epoch = 5;
+  optional string fence = 6;
+}
+
+message Execution {
+  optional string schema_version = 1;
+  Attempt attempt = 2;
+  optional string execution_id = 3;
+  optional string session_epoch = 4;
+  optional string deadline_unix_ms = 5;
+  optional string physical_state = 6;
+}

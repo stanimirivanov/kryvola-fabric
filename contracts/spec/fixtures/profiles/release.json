@@ -1,0 +1,79 @@
+{
+  "schema_version": "1",
+  "stage": "M0_CONTRACT_CANDIDATE",
+  "production_ready": false,
+  "profile_enabled": false,
+  "qualification": "UNQUALIFIED",
+  "schema_source_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "ratification_revision": null,
+  "contract_version": "0.1.0-preview.10",
+  "bundle_manifest_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "workload": {
+    "profile_id": "FHE-Q1",
+    "profile_version": "1",
+    "parameter_set_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "model_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "program_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "engine_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "dataset_snapshot_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "arithmetic": "EXACT_MODULAR",
+    "precision": {
+      "dtype": "uint8",
+      "fractional_bits": "0",
+      "overflow": "WRAP"
+    },
+    "operators": [
+      "ADD"
+    ],
+    "input_shape": [
+      "2"
+    ],
+    "output_shape": [
+      "2"
+    ]
+  },
+  "evidence": {
+    "policy_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "policy": "NONE",
+    "relations": []
+  },
+  "model_descriptor_sha256": "38480cf4296e5a3c13d2ba4bd2c56719c2426f75f27f27e7faa97b4f5ff809ac",
+  "measurement_report_sha256": "be2c9bf9e7cb2255f0e6dfb5cbc0428bb1810172c5e69116197b0c1623a233a4",
+  "components": {
+    "spec": {
+      "name": "kryvola-spec",
+      "version": "0.1.0-preview.10",
+      "source_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "artifact_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "fabric": {
+      "name": "kryvola-fabric",
+      "version": "0.0.0-synthetic",
+      "source_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "artifact_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "engines": {
+      "name": "kryvola-engines",
+      "version": "0.0.0-synthetic",
+      "source_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "artifact_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "ml": {
+      "name": "kryvola-ml",
+      "version": "0.0.0-synthetic",
+      "source_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "artifact_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "platform": {
+      "name": "kryvola-platform",
+      "version": "0.0.0-synthetic",
+      "source_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "artifact_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }
+  },
+  "legal": {
+    "disposition": "UNRESOLVED",
+    "intended_use": "Synthetic contract conformance only",
+    "evidence_sha256": []
+  }
+}

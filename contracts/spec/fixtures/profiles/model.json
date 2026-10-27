@@ -1,0 +1,35 @@
+{
+  "schema_version": "1",
+  "model_version": "0.0.0-synthetic",
+  "workload": {
+    "profile_id": "FHE-Q1",
+    "profile_version": "1",
+    "parameter_set_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "model_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "program_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "engine_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "dataset_snapshot_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "arithmetic": "EXACT_MODULAR",
+    "precision": {
+      "dtype": "uint8",
+      "fractional_bits": "0",
+      "overflow": "WRAP"
+    },
+    "operators": [
+      "ADD"
+    ],
+    "input_shape": [
+      "2"
+    ],
+    "output_shape": [
+      "2"
+    ]
+  },
+  "dataset_license": "SYNTHETIC-NO-DATASET",
+  "dataset_split": "SYNTHETIC",
+  "dataset_samples": "3",
+  "preprocessing_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "reference_program_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "numerical_error_budget": "0",
+  "model_visibility": "PUBLIC"
+}

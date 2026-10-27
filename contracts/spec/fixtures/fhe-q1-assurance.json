@@ -1,0 +1,39 @@
+{
+  "profile_id": "FHE-Q1",
+  "profile_version": "1",
+  "enabled": false,
+  "review_status": "UNREVIEWED",
+  "review_evidence": [],
+  "legal_disposition_id": "unresolved-fhe-q1",
+  "parameter_profile_id": "unreviewed-fhe-q1-parameters",
+  "ownership_model": "SINGLE_OWNER",
+  "claims": {
+    "input_confidentiality": "OWNER_KEY_ENCRYPTION",
+    "computation_integrity": "UNPROVEN",
+    "input_validity": "NOT_ESTABLISHED",
+    "model_visibility": "PUBLIC",
+    "output_privacy": "ENCRYPTED_TO_OWNER",
+    "witness_privacy": "PUBLIC_DATA_ONLY",
+    "availability": "BEST_EFFORT"
+  },
+  "assumptions": {
+    "owner_endpoint_trusted": true,
+    "control_plane_release_trusted": true,
+    "parameter_review_required": true,
+    "tenant_isolation_required": true,
+    "residual_side_channels": true,
+    "owner_compromise_excluded": true
+  },
+  "metadata_leakage": [
+    "INPUT_SHAPE",
+    "MODEL_PROGRAM",
+    "CRYPTO_PAYLOAD_SIZE",
+    "TIMING",
+    "ACCESS_PATTERN",
+    "KEY_REUSE",
+    "CACHE_STATE"
+  ],
+  "private_key_custody": "OWNER_ONLY",
+  "release_authority": "TEMPORAL_WORKFLOW",
+  "allowed_proof_relations": []
+}

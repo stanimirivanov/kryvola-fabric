@@ -3,6 +3,7 @@
 pub mod contract;
 #[path = "../../../contracts/spec/rust/limits.rs"]
 pub mod limits;
+pub mod wire;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct ControlTooLarge {

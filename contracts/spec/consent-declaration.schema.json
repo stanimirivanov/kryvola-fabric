@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "profile_id": {
+      "type": "string",
+      "enum": [
+        "FHE-Q1"
+      ]
+    },
+    "profile_version": {
+      "type": "string",
+      "enum": [
+        "1"
+      ]
+    },
+    "model_visibility": {
+      "type": "string",
+      "enum": [
+        "PUBLIC"
+      ]
+    },
+    "computation_integrity": {
+      "type": "string",
+      "enum": [
+        "UNPROVEN"
+      ]
+    },
+    "owner_endpoint_trust": {
+      "type": "string",
+      "enum": [
+        "REQUIRED"
+      ]
+    },
+    "residual_side_channels": {
+      "type": "string",
+      "enum": [
+        "NOT_ELIMINATED"
+      ]
+    },
+    "owner_compromise": {
+      "type": "string",
+      "enum": [
+        "OUT_OF_SCOPE"
+      ]
+    },
+    "accepted_leakage": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "INPUT_SHAPE",
+          "MODEL_PROGRAM",
+          "CRYPTO_PAYLOAD_SIZE",
+          "TIMING",
+          "ACCESS_PATTERN",
+          "KEY_REUSE",
+          "CACHE_STATE"
+        ]
+      },
+      "maxItems": 7
+    },
+    "allow_unverified_release": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "profile_id",
+    "profile_version",
+    "model_visibility",
+    "computation_integrity",
+    "owner_endpoint_trust",
+    "residual_side_channels",
+    "owner_compromise",
+    "accepted_leakage",
+    "allow_unverified_release"
+  ],
+  "additionalProperties": false
+}

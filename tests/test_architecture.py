@@ -10,7 +10,13 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from tools.architecture import REQUIRED_ARTIFACTS, dependency_errors, verify_contracts
+from tools.architecture import (
+    REQUIRED_ARTIFACTS,
+    REQUIRED_NATIVE_ARTIFACTS,
+    RUNTIME_ASSETS,
+    dependency_errors,
+    verify_contracts,
+)
 
 
 class ArchitectureTests(unittest.TestCase):
@@ -27,6 +33,29 @@ class ArchitectureTests(unittest.TestCase):
             entries[name] = hashlib.sha256(data).hexdigest()
         manifest = json.dumps({"contract_version": "fixture", "files": entries}).encode()
         (vendor / "manifest.json").write_bytes(manifest)
+        native = root / "contracts/native"
+        native.mkdir(parents=True)
+        for name in REQUIRED_NATIVE_ARTIFACTS:
+            (native / name).write_bytes(data)
+        bindings = json.dumps(
+            {
+                "contract_version": "fixture",
+                "files": {
+                    name: hashlib.sha256(data).hexdigest() for name in REQUIRED_NATIVE_ARTIFACTS
+                },
+                "sources": {
+                    "generated/" + name: hashlib.sha256((vendor / name).read_bytes()).hexdigest()
+                    for name in ["manifest.json", *entries]
+                },
+            }
+        ).encode()
+        (native / "manifest.json").write_bytes(bindings)
+        packaged = root / "src/kryvola_fabric/_spec"
+        packaged.mkdir(parents=True)
+        for name, bundle in RUNTIME_ASSETS.items():
+            (packaged / name).write_bytes(
+                ((vendor if bundle == "spec" else native) / name).read_bytes()
+            )
         (root / "spec.lock.json").write_text(
             json.dumps(
                 {
@@ -35,6 +64,8 @@ class ArchitectureTests(unittest.TestCase):
                     "revision": "a" * 40,
                     "artifact_root": "contracts/spec",
                     "manifest_sha256": hashlib.sha256(manifest).hexdigest(),
+                    "native_artifact_root": "contracts/native",
+                    "native_manifest_sha256": hashlib.sha256(bindings).hexdigest(),
                 }
             ),
             encoding="utf-8",
@@ -43,7 +74,7 @@ class ArchitectureTests(unittest.TestCase):
             '[project]\nname="fixture"\ndependencies=[]\n', encoding="utf-8"
         )
         (root / "Cargo.toml").write_text("[workspace]\nmembers=[]\n", encoding="utf-8")
-        (root / "src").mkdir()
+        (root / "src").mkdir(exist_ok=True)
         (root / "src/sample.py").write_text("from pathlib import Path\n", encoding="utf-8")
 
     def test_valid_isolated_fixture_passes(self) -> None:
@@ -52,6 +83,33 @@ class ArchitectureTests(unittest.TestCase):
             self.fixture(root)
             verify_contracts(root)
             self.assertEqual(dependency_errors(root, "kryvola-ml"), [])
+
+    def test_native_and_packaged_assets_cannot_drift(self) -> None:
+        for name, reason in [
+            ("contracts/native/descriptor.bin", "modified native"),
+            ("src/kryvola_fabric/_spec/schemas.json", "packaged runtime"),
+        ]:
+            with TemporaryDirectory() as directory:
+                root = Path(directory)
+                self.fixture(root)
+                (root / name).write_bytes(b"tampered")
+                with self.assertRaisesRegex(ValueError, reason):
+                    verify_contracts(root)
+
+    def test_individually_hashed_bundles_must_match_each_other(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.fixture(root)
+            path = root / "contracts/native/manifest.json"
+            bindings = json.loads(path.read_bytes())
+            bindings["sources"]["generated/limits.json"] = "b" * 64
+            path.write_text(json.dumps(bindings), encoding="utf-8")
+            lock_path = root / "spec.lock.json"
+            lock = json.loads(lock_path.read_bytes())
+            lock["native_manifest_sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+            lock_path.write_text(json.dumps(lock), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "mixed generated/native"):
+                verify_contracts(root)
 
     def test_modified_contract_and_missing_inputs_fail(self) -> None:
         with TemporaryDirectory() as directory:

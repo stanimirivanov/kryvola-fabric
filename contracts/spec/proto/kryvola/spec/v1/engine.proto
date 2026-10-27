@@ -1,0 +1,91 @@
+// Generated structural preview; validate presence, constraints and context in application decoders.
+syntax = "proto3";
+
+package kryvola.spec.v1;
+
+import "kryvola/spec/v1/artifact_ref.proto";
+import "kryvola/spec/v1/control.proto";
+
+message Capabilities {
+  optional string schema_version = 1;
+  optional string engine_digest = 2;
+  optional string parameter_set_digest = 3;
+  repeated string security_profiles = 4;
+  repeated string program_digests = 5;
+  repeated string operators = 6;
+  optional string arithmetic = 7;
+  optional string max_parallel_executions = 8;
+}
+
+message GetCapabilitiesRequest {
+  optional string schema_version = 1;
+}
+
+message GetCapabilitiesResponse {
+  optional string schema_version = 1;
+  Capabilities capabilities = 2;
+}
+
+message ExecuteRequest {
+  optional string schema_version = 1;
+  Operation operation = 2;
+  Execution execution = 3;
+  optional string engine_digest = 4;
+  optional string parameter_set_digest = 5;
+  optional string program_digest = 6;
+  optional string security_profile = 7;
+  repeated string required_operators = 8;
+  repeated ArtifactRef input_refs = 9;
+  optional string output_contract_digest = 10;
+  optional string resource_profile_digest = 11;
+}
+
+message ExecuteResponse {
+  optional string schema_version = 1;
+  Execution execution = 2;
+}
+
+message GetExecutionStatusRequest {
+  optional string schema_version = 1;
+  Attempt attempt = 2;
+  optional string execution_id = 3;
+}
+
+message GetExecutionStatusResponse {
+  optional string schema_version = 1;
+  Execution execution = 2;
+  repeated ArtifactRef output_refs = 3;
+  optional string error_code = 4;
+}
+
+message CancelExecutionRequest {
+  optional string schema_version = 1;
+  Attempt attempt = 2;
+  optional string execution_id = 3;
+  optional string cancellation_id = 4;
+}
+
+message CancelExecutionResponse {
+  optional string schema_version = 1;
+  Attempt attempt = 2;
+  optional string execution_id = 3;
+  optional string cancellation_id = 4;
+  optional string cancellation_state = 5;
+}
+
+message ExecutionObservedEvent {
+  optional string schema_version = 1;
+  optional string event_id = 2;
+  optional string causation_id = 3;
+  optional string aggregate_sequence = 4;
+  optional string event_type = 5;
+  Operation operation = 6;
+  GetExecutionStatusResponse observation = 7;
+}
+
+service EngineService {
+  rpc GetCapabilities(GetCapabilitiesRequest) returns (GetCapabilitiesResponse);
+  rpc Execute(ExecuteRequest) returns (ExecuteResponse);
+  rpc GetExecutionStatus(GetExecutionStatusRequest) returns (GetExecutionStatusResponse);
+  rpc CancelExecution(CancelExecutionRequest) returns (CancelExecutionResponse);
+}
