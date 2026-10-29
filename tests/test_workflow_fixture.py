@@ -36,6 +36,8 @@ class BoundaryTests(unittest.TestCase):
             created = run.call_args_list[0].args[0]
             name = created[created.index("--name") + 1]
             self.assertTrue(name.startswith("kryvola-conformance-"))
+            self.assertIn("HOME=/tmp", created)
+            self.assertIn("--read-only", created)
             self.assertEqual(run.call_args_list[-1].args[0], ["docker", "rm", "-f", name])
 
     def test_public_request_matches_published_wire(self):

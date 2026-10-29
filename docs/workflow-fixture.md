@@ -41,6 +41,8 @@ The SDK owns a loopback-only ephemeral Temporal dev server. The runner owns a
 uniquely named, digest-pinned Ray container: no network or published ports,
 read-only root, bounded memory/CPU/PIDs and tmpfs, and only its fixed read-only
 task script mounted. The runner removes it in `finally`; the SDK stops Temporal.
+Its home is inside tmpfs, including Ray's self-generated ephemeral local auth token;
+no host credentials are supplied and the token is never printed or uploaded.
 Remote Docker contexts are refused. Host Docker access is a trusted test harness
 privilege, not a production bridge design. No socket, credentials, keys or user
 closures enter Ray. A killed runner can leave its named fixture container behind;
