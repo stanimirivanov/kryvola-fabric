@@ -11,6 +11,7 @@ uv sync --locked --extra conformance
 uv run --locked --extra conformance python tools/verify.py fast
 # Linux x86_64 with local Docker; downloads a checksum-pinned test CLI:
 uv run --locked --extra conformance python tools/install_temporal.py
+uv run --locked --extra conformance python tools/install_release.py
 uv run --locked --extra conformance python tools/verify.py full
 uv run --locked python -m kryvola_fabric
 ```
@@ -33,3 +34,8 @@ real Temporal/Ray execution and history replay, with no production execution rig
 Temporal owns durable logical workflow intent. Ray is disposable compute scheduling; a bridge cannot authorize disclosure. The future SQL registry enforces physical attempt fences. Private decryption keys remain in the owner domain; none of these scaffolds implement custody or a decrypt API.
 
 Next planned work: KRY-011/012 identity and immutable artifacts, after spec KRY-002/003/004/005 are reviewed.
+
+The [experimental wheel publisher](docs/publication.md) supplies the missing
+M0-PR31 package prerequisite through a manual, main-only GitHub prerelease.
+Full CI also requires `uv run --locked --extra conformance python tools/install_release.py`
+before `tools/verify.py full`; it never publishes on a push or pull request.

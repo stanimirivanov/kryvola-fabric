@@ -42,3 +42,17 @@ Observed locally: formatting/lint, type and architecture checks and 17 Python
 tests passed. Native compilation, package isolation and live Temporal/Ray replay
 are delegated to pre-PR CI; its result is recorded in the PR. No production
 qualification is claimed by this entry.
+
+## Fabric publication prerequisite for M0-PR31
+
+Issue #7 adds a manual main-only experimental Python-wheel publisher. Two staged
+builds, packaged-resource checks, a hash-bound licence/lock/SBOM/provenance manifest,
+and keyless workflow verification precede a no-replacement draft-to-prerelease
+publication. CI tests actual local signature acceptance, wrong keys and tampering;
+no private fixture key is uploaded. [Scope and gates](publication.md) distinguish
+local qualification from public signer identity and production readiness.
+
+Observed local formatting/lint/type and offline publication tests are recorded
+in the PR alongside the full pre-PR CI result. No package has been published by
+this implementation; source/generated contracts and runtime dependencies remain
+unchanged. M0-PR31 remains dependent on actual reviewed publication and pins.

@@ -22,5 +22,6 @@ jobs:
       - run: rustup toolchain install 1.98.1 --profile minimal --component rustfmt,clippy
       - run: uv sync --locked --extra conformance
       - run: uv run --locked --extra conformance python tools/install_temporal.py
+      - run: uv run --locked --extra conformance python tools/install_release.py
       - run: uv run --locked --extra conformance python tools/verify.py full
       - run: uv run --locked python -m kryvola_fabric
