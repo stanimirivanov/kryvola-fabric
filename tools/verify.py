@@ -38,6 +38,14 @@ def main() -> None:
         else:
             run("uv", "build", "--no-build-isolation", "--wheel")
             run(sys.executable, "tools/check_wheel.py")
+        run(
+            sys.executable,
+            "-m",
+            "kryvola_fabric.conformance",
+            "smoke",
+            "--temporal-cli",
+            str(ROOT / "build/temporal/temporal"),
+        )
 
 
 if __name__ == "__main__":

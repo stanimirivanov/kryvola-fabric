@@ -14,6 +14,9 @@ import kryvola_fabric
 assert sys.argv[1] in kryvola_fabric.__file__
 from kryvola_fabric.control import decode_control
 assert decode_control('GetCapabilitiesRequest', bytes.fromhex('0a0131'))['schema_version']=='1'
+from importlib.resources import files
+from kryvola_fabric.conformance.boundary import descriptor
+assert descriptor(files('kryvola_fabric.conformance').joinpath('public-request.bin').read_bytes())
 """
 root = Path(__file__).resolve().parents[1]
 wheel = max((root / "dist").glob("*.whl"), key=lambda path: path.stat().st_mtime_ns)

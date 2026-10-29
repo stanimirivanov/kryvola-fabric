@@ -13,8 +13,8 @@ from kryvola_fabric.control import ControlError, check_control_size, decode_cont
 ROOT = Path(__file__).resolve().parents[1]
 VECTORS = json.loads((ROOT / "contracts/native/vectors.json").read_bytes())
 FIXTURES = json.loads((ROOT / "contracts/native/fixtures.json").read_bytes())
-POOL = descriptor_pool.DescriptorPool()  # ty: ignore[possibly-missing-implicit-call]
-for file in descriptor_pb2.FileDescriptorSet.FromString(  # ty: ignore[unresolved-attribute] - generated export
+POOL = descriptor_pool.DescriptorPool()
+for file in descriptor_pb2.FileDescriptorSet.FromString(
     (ROOT / "contracts/native/descriptor.bin").read_bytes()
 ).file:
     POOL.Add(file)
@@ -71,7 +71,7 @@ class ControlTests(unittest.TestCase):
             POOL.FindMessageTypeByName("kryvola.spec.v1.ExecuteRequest")
         )()
         request.ParseFromString(wire("ExecuteRequest", FIXTURES["ExecuteRequest"]))
-        request.execution.MergeFromString(b"\xfa\x1f\x08SECRET_X")
+        request.execution.MergeFromString(b"\xfa\x1f\x08SECRET_X")  # ty: ignore[unresolved-attribute] - dynamic descriptor
         with self.assertRaises(ControlError):
             decode_control("ExecuteRequest", request.SerializeToString())
 

@@ -1,7 +1,7 @@
 # kryvola-fabric essentials
 
 - Start with README and [architecture/enforcement](docs/architecture.md); use linked design/plan sections when relevant. [Progress](docs/progress.md) distinguishes scaffold from remaining roadmap work.
-- Setup: `uv sync --locked`. Fast: `uv run --locked python tools/verify.py fast`. Full: `uv run --locked python tools/verify.py full`. Inspect: `uv run --locked python -m kryvola_fabric`.
+- Setup: `uv sync --locked --extra conformance`. Fast: `uv run --locked --extra conformance python tools/verify.py fast`. Full (Linux x86_64/local Docker): first `uv run --locked --extra conformance python tools/install_temporal.py`, then `uv run --locked --extra conformance python tools/verify.py full`. Inspect: `uv run --locked python -m kryvola_fabric`.
 - Before committing, run `uv run --locked ruff format .`, apply needed safe lint fixes, then `uv run --locked ruff check .` and `cargo fmt --all`. Review the diff for unrelated changes. Keep heavy compilation/tests on CI when requested.
 - Temporal owns durable logical workflow intent. Ray is disposable compute scheduling; a bridge cannot authorize disclosure. The future SQL registry enforces physical attempt fences. Private decryption keys remain in the owner domain; none of these scaffolds implement custody or a decrypt API.
 - Author non-OpenAPI contracts in the spec repository with Effect v4 / TypeScript 7; OpenAPI uses Redocly. Consume generated release artifacts; do not import sibling implementation source or hand-edit vendored contracts.

@@ -28,3 +28,17 @@ Final harness-only normalization of package names and direct local URI dependenc
 27 October 2026, issue #3: adopted the merged spec snapshot `1a5b57a590487ba116913050af8041f5e5f1fb52` / `0.1.0-preview.10` with unchanged generated/native artifacts, matching provenance and verified private wheel assets. [Rust/Python wrappers](control-validation.md) add strict Protobuf/schema/correlation validation, nested unknown-field rejection and serialized control/Temporal budgets while preserving the old Rust size helper. Fixed safe errors retain no library diagnostic/cause. No workflows, authentication service, registry, key custody, authorization or proof/ciphertext processing is implemented; M0 remains partial.
 
 Local verification covers Python formatting/lint/types, small unit/provenance checks and rustfmt. Rust compilation/Clippy/tests, wheel build/isolation and the full canonical fabric harness are delegated to existing PR CI as requested. Hosted CI results are not claimed.
+
+## M0-PR30 — Temporal-to-Ray fixture
+
+Issue #5 adds an opt-in test-only Temporal worker, fixed reference-only Ray task,
+strict pre-dispatch descriptor validation, bounded duplicate/stale observations,
+sanitized failures and actual history replay. The full gate owns isolated local
+services and cleanup; the wheel gate checks the packaged public wire vector.
+See [fixture boundaries and gates](workflow-fixture.md). Registry fences,
+authorization, disclosure and durable inference remain M1 work.
+
+Observed locally: formatting/lint, type and architecture checks and 17 Python
+tests passed. Native compilation, package isolation and live Temporal/Ray replay
+are delegated to pre-PR CI; its result is recorded in the PR. No production
+qualification is claimed by this entry.
