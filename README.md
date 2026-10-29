@@ -7,9 +7,11 @@ Rust control services and separate Python orchestration package. This is an init
 Prerequisites: Python 3.14.7 and uv 0.12.5; Rust 1.98.1 with rustfmt/clippy. Python is pinned in `.python-version`; Rust is pinned in `rust-toolchain.toml` where applicable. Run from this repository root:
 
 ```sh
-uv sync --locked
-uv run --locked python tools/verify.py fast
-uv run --locked python tools/verify.py full
+uv sync --locked --extra conformance
+uv run --locked --extra conformance python tools/verify.py fast
+# Linux x86_64 with local Docker; downloads a checksum-pinned test CLI:
+uv run --locked --extra conformance python tools/install_temporal.py
+uv run --locked --extra conformance python tools/verify.py full
 uv run --locked python -m kryvola_fabric
 ```
 
@@ -20,6 +22,9 @@ No service credentials or local databases are required for this scope. `spec.loc
 M0-PR14 adds [strict Rust/Python control validation](docs/control-validation.md) over pinned Protobuf descriptors and schemas, with complete payload/Temporal-call budgets. The helpers grant no execution or disclosure rights. Before committing, apply formatting/lint fixes and check the full changed-file diff, including documentation; heavy checks may run on CI.
 
 ## Authoritative context
+
+The [M0-PR30 workflow fixture](docs/workflow-fixture.md) is opt-in test infrastructure:
+real Temporal/Ray execution and history replay, with no production execution rights.
 
 - [Design v2](https://github.com/stanimirivanov/kryvola-spec/blob/647986b9ba9cb2c6d3b853046272e3869b6fea5e/docs/kryvola-design-v2.md)
 - [Implementation plan v2](https://github.com/stanimirivanov/kryvola-spec/blob/647986b9ba9cb2c6d3b853046272e3869b6fea5e/docs/kryvola-implementation-plan-v2.md)

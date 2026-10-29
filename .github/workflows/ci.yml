@@ -2,7 +2,7 @@ name: foundation
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, 'feature/issue-*', 'fix/issue-*']
 permissions:
   contents: read
 concurrency:
@@ -11,7 +11,7 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -20,6 +20,7 @@ jobs:
         with:
           version: "0.12.5"
       - run: rustup toolchain install 1.98.1 --profile minimal --component rustfmt,clippy
-      - run: uv sync --locked
-      - run: uv run --locked python tools/verify.py full
+      - run: uv sync --locked --extra conformance
+      - run: uv run --locked --extra conformance python tools/install_temporal.py
+      - run: uv run --locked --extra conformance python tools/verify.py full
       - run: uv run --locked python -m kryvola_fabric

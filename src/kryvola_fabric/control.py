@@ -18,8 +18,8 @@ _ASSETS = files("kryvola_fabric").joinpath("_spec")
 _LIMITS = json.loads(_ASSETS.joinpath("limits.json").read_bytes())
 _SCHEMAS = json.loads(_ASSETS.joinpath("schemas.json").read_bytes())
 # Protobuf exports these C-backed APIs dynamically; ty cannot model the generated declarations.
-_POOL = descriptor_pool.DescriptorPool()  # ty: ignore[possibly-missing-implicit-call]
-for _file in descriptor_pb2.FileDescriptorSet.FromString(  # ty: ignore[unresolved-attribute] - generated export
+_POOL = descriptor_pool.DescriptorPool()
+for _file in descriptor_pb2.FileDescriptorSet.FromString(
     _ASSETS.joinpath("descriptor.bin").read_bytes()
 ).file:
     _POOL.Add(_file)
@@ -39,7 +39,7 @@ def check_control_size(payload: bytes, temporal: bool = False) -> None:
 
 
 def _known(message: Message) -> bool:
-    if list(unknown_fields.UnknownFieldSet(message)):
+    if len(unknown_fields.UnknownFieldSet(message)):
         return False
     for field, value in message.ListFields():
         if field.message_type:

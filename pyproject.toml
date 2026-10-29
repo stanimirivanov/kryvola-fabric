@@ -6,6 +6,11 @@ requires-python = ">=3.14,<3.15"
 license = "Apache-2.0"
 dependencies = ["protobuf==7.35.1", "jsonschema==4.26.0"]
 
+[project.optional-dependencies]
+conformance = [
+    "temporalio==1.35.0",
+]
+
 [dependency-groups]
 dev = ["ruff==0.17.2", "ty==0.0.91", "hatchling==1.32.4"]
 
