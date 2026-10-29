@@ -3,6 +3,7 @@
 import argparse
 import asyncio
 import hashlib
+import json
 import os
 import subprocess
 from datetime import timedelta
@@ -11,12 +12,12 @@ from pathlib import Path
 from uuid import uuid4
 
 from temporalio import activity
-from temporalio.client import WorkflowFailureError
+from temporalio.client import WorkflowExecutionStatus, WorkflowFailureError
 from temporalio.exceptions import ActivityError, ApplicationError
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Replayer, Worker
 
-from .boundary import execute
+from .boundary import descriptor, execute
 from .workflow import FixtureWorkflow
 
 RAY_IMAGE = "rayproject/ray@sha256:e93e502244bf8c0ecf8c633099f7819d7c973d76eded8e32617e1fb66725da02"
@@ -41,6 +42,23 @@ def executor(container: str):
 async def exercise(cli: str, container: str) -> None:
     payload = files(__package__).joinpath("public-request.bin").read_bytes()
     digest = hashlib.sha256(payload).hexdigest()
+    # Only this immutable public fixture gets startup diagnostics, never an activity payload.
+    preflight = await asyncio.to_thread(
+        subprocess.run,
+        ["docker", "exec", "-i", container, "python", "/fixture/ray_task.py"],
+        input=json.dumps(descriptor(payload)).encode(),
+        capture_output=True,
+        timeout=45,
+    )
+    assert isinstance(preflight.stdout, bytes) and isinstance(preflight.stderr, bytes)
+    if preflight.returncode or preflight.stdout != (digest + "\n").encode():
+        print(
+            "PUBLIC_FIXTURE_PREFLIGHT",
+            preflight.returncode,
+            preflight.stdout[-2048:].decode(errors="replace"),
+            preflight.stderr[-4096:].decode(errors="replace"),
+        )
+        raise RuntimeError("PUBLIC_FIXTURE_PREFLIGHT_FAILED")
     async with await WorkflowEnvironment.start_local(
         dev_server_existing_path=cli,
         dev_server_startup_timeout=timedelta(seconds=30),
@@ -72,6 +90,8 @@ async def exercise(cli: str, container: str) -> None:
                 else:
                     async with asyncio.timeout(90):
                         while not await handle.query(FixtureWorkflow.state):
+                            if (await handle.describe()).status != WorkflowExecutionStatus.RUNNING:
+                                await handle.result()  # surface terminal failures immediately
                             await asyncio.sleep(0.1)
                     # A fresh Ray runtime repeats physical work; no Ray identifier owns intent.
                     assert await asyncio.to_thread(execute, container, payload) == digest
