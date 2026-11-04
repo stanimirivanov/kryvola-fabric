@@ -153,3 +153,126 @@ async fn registry_survives_postgres_restart() {
         Err(RegistryError::AttemptExpired),
     );
 }
+
+#[tokio::test]
+#[ignore = "requires the isolated PostgreSQL instance from runtime_integration.py ci"]
+async fn bounded_uploads() {
+    use futures_util::TryStreamExt;
+    use kryvola_fabric_core::{
+        authorization::{Authorizer, Scope, sha256_hex},
+        upload::{UploadError, UploadStore},
+    };
+    use object_store::{ObjectStore, aws::AmazonS3Builder, path::Path};
+    use std::{
+        path::PathBuf,
+        sync::Arc,
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
+    let pool = PgPoolOptions::new()
+        .connect_with(fixture_options())
+        .await
+        .unwrap();
+    Registry::new(pool.clone()).migrate().await.unwrap();
+    let folder = PathBuf::from(std::env::var_os("FABRIC_FIXTURE_PG_SOCKET").unwrap());
+    let path = folder.parent().unwrap().join("upload-test-policy.json");
+    let auth = Authorizer::new(path.clone()).unwrap();
+    let scope_json = json!({
+        "schema_version":"1","attempt":{"schema_version":"1","tenant_scope":"uploads",
+        "operation_id":"op","workflow_epoch":"1","attempt_epoch":"1","fence":"1"},
+        "manifest_digest":"a".repeat(64),"purpose":"COMPUTE_WRITE"
+    });
+    let scope = Scope::decode(scope_json.to_string().as_bytes()).unwrap();
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+    let permit = |n: u8, certificate: &str| {
+        let token = hex::encode([n; 32]);
+        std::fs::write(
+            &path,
+            json!({"boot_id":auth.boot_id(),"grants":[{
+                "certificate_sha256":certificate,"token_sha256":sha256_hex(token.as_bytes()),
+                "scope":scope_json,"expires_unix_ms":now+55_000
+            }]})
+            .to_string(),
+        )
+        .unwrap();
+        auth.redeem_upload(certificate, &token, &scope).unwrap()
+    };
+
+    let objects: Arc<dyn ObjectStore> = Arc::new(
+        AmazonS3Builder::new()
+            .with_endpoint(std::env::var("FABRIC_FIXTURE_S3_ENDPOINT").unwrap())
+            .with_access_key_id(std::env::var("AWS_ACCESS_KEY_ID").unwrap())
+            .with_secret_access_key(std::env::var("AWS_SECRET_ACCESS_KEY").unwrap())
+            .with_region("us-east-1")
+            .with_bucket_name("fabric-runtime")
+            .with_allow_http(true)
+            .build()
+            .unwrap(),
+    );
+    let store = UploadStore::new(pool, objects.clone(), 8);
+    assert_eq!(
+        store.reserve(permit(1, "worker"), 0).await,
+        Err(UploadError::Size)
+    );
+    let (a, b) = tokio::join!(
+        store.reserve(permit(2, "worker"), 6),
+        store.reserve(permit(3, "worker"), 6)
+    );
+    let id = match (a, b) {
+        (Ok(id), Err(UploadError::Quota)) | (Err(UploadError::Quota), Ok(id)) => id,
+        _ => panic!("exactly one reservation must fit"),
+    };
+    assert_eq!(
+        store
+            .put_part(permit(4, "other"), &id, 0, 4, &b"data"[..])
+            .await,
+        Err(UploadError::Denied)
+    );
+    assert_eq!(
+        store
+            .put_part(permit(5, "worker"), &id, 0, 4, &b"short"[..2])
+            .await,
+        Err(UploadError::Size)
+    );
+    assert_eq!(
+        store
+            .put_part(permit(6, "worker"), &id, 0, 4, &b"extra"[..])
+            .await,
+        Err(UploadError::Size)
+    );
+    store
+        .put_part(permit(7, "worker"), &id, 0, 4, &b"data"[..])
+        .await
+        .unwrap();
+    assert_eq!(
+        store
+            .put_part(permit(8, "worker"), &id, 0, 4, &b"evil"[..])
+            .await,
+        Err(UploadError::Conflict)
+    );
+    assert_eq!(
+        store
+            .put_part(permit(9, "worker"), &id, 1, 3, &b"abc"[..])
+            .await,
+        Err(UploadError::Size)
+    );
+    store.abort(permit(10, "worker"), &id).await.unwrap();
+    assert!(
+        objects
+            .list(Some(&Path::from(format!("staging/{id}"))))
+            .try_next()
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(
+        store
+            .put_part(permit(11, "worker"), &id, 1, 1, &b"x"[..])
+            .await,
+        Err(UploadError::Denied)
+    );
+    store.reserve(permit(12, "worker"), 8).await.unwrap();
+}

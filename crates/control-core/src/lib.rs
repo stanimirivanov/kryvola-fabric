@@ -5,6 +5,7 @@ pub mod contract;
 #[path = "../../../contracts/spec/rust/limits.rs"]
 pub mod limits;
 pub mod registry;
+pub mod upload;
 pub mod wire;
 
 #[derive(Debug, PartialEq, Eq)]

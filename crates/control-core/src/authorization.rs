@@ -10,14 +10,14 @@ use std::{
 };
 
 use ring::{digest, rand::SecureRandom};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 const POLICY_BYTES: u64 = 256 * 1024;
 const MAX_GRANTS: usize = 256;
 const MAX_REDEEMED: usize = 4096;
 const MAX_TTL_MS: u64 = 60_000;
 
-#[derive(Deserialize, PartialEq, Eq)]
+#[derive(Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct Scope {
     schema_version: String,
@@ -26,7 +26,7 @@ pub struct Scope {
     purpose: Purpose,
 }
 
-#[derive(Deserialize, PartialEq, Eq)]
+#[derive(Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 struct Attempt {
     schema_version: String,
@@ -37,7 +37,7 @@ struct Attempt {
     fence: String,
 }
 
-#[derive(Deserialize, PartialEq, Eq)]
+#[derive(Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 enum Purpose {
     ComputeRead,
@@ -94,6 +94,30 @@ struct Grant {
     expires_unix_ms: u64,
 }
 
+/// A freshly redeemed compute-write grant. Runtime callers supply the verified peer.
+pub struct UploadPermit {
+    pub(crate) tenant: String,
+    pub(crate) certificate: String,
+    pub(crate) scope: serde_json::Value,
+    expires: u64,
+}
+
+impl UploadPermit {
+    pub(crate) fn live(&self) -> bool {
+        now_unix_ms().is_some_and(|now| now < self.expires)
+    }
+}
+
+fn now_unix_ms() -> Option<u64> {
+    u64::try_from(
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .ok()?
+            .as_millis(),
+    )
+    .ok()
+}
+
 pub struct Authorizer {
     path: PathBuf,
     boot_id: String,
@@ -119,6 +143,24 @@ impl Authorizer {
 
     pub fn boot_id(&self) -> &str {
         &self.boot_id
+    }
+
+    pub fn redeem_upload(
+        &self,
+        certificate: &str,
+        token: &str,
+        scope: &Scope,
+    ) -> Option<UploadPermit> {
+        if scope.purpose != Purpose::ComputeWrite {
+            return None;
+        }
+        let expires = self.redeem(certificate, token, scope)?;
+        Some(UploadPermit {
+            tenant: scope.attempt.tenant_scope.clone(),
+            certificate: certificate.to_owned(),
+            scope: serde_json::to_value(scope).ok()?,
+            expires,
+        })
     }
 
     pub fn redeem(&self, certificate: &str, token: &str, scope: &Scope) -> Option<u64> {
