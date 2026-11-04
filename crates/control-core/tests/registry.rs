@@ -218,7 +218,7 @@ async fn bounded_uploads() {
             .build()
             .unwrap(),
     );
-    let store = UploadStore::new(pool, objects.clone(), 8);
+    let store = UploadStore::new(pool.clone(), objects.clone(), 8);
     assert_eq!(
         store.reserve(permit(1, "worker"), 0).await,
         Err(UploadError::Size)
@@ -348,5 +348,122 @@ async fn bounded_uploads() {
             .put_part(permit(22, "worker"), &id, 0, 4, &b"evil"[..])
             .await,
         Err(UploadError::Conflict)
+    );
+    use kryvola_fabric_core::registry::{ExecutionTarget, OperationKey};
+    let mut operation: Value = serde_json::from_str::<Value>(include_str!(
+        "../../../contracts/spec/fixtures/control.json"
+    ))
+    .unwrap()["Operation"]
+        .clone();
+    operation["operation_id"] = json!("op");
+    operation["idempotency_key"] = json!("selection");
+    operation["workflow_epoch"] = json!("1");
+    operation["deadline_unix_ms"] = json!((now + 120_000).to_string());
+    let intent = OperationIntent::new(
+        &ControlValidator::new().unwrap(),
+        operation,
+        vec!["a".repeat(64)],
+    )
+    .unwrap();
+    let registry = Registry::new(pool.clone());
+    registry.create_operation(&intent).await.unwrap();
+    let key = OperationKey {
+        tenant_scope: "tenant-fixture",
+        operation_id: "op",
+    };
+    let attempt = registry.ensure_attempt(key, 1, 1).await.unwrap();
+    let one = ExecutionTarget {
+        workflow_epoch: 1,
+        attempt_epoch: 1,
+        fence: attempt.fence,
+        execution_id: "exec-1",
+        plan_digest: &"c".repeat(64),
+        policy_digest: &"d".repeat(64),
+    };
+    let two = ExecutionTarget {
+        execution_id: "exec-2",
+        ..one
+    };
+    assert_eq!(
+        registry
+            .register_execution(key, ExecutionTarget { fence: 9, ..one })
+            .await,
+        Err(RegistryError::StaleFence)
+    );
+    registry.register_execution(key, one).await.unwrap();
+    registry.register_execution(key, two).await.unwrap();
+    assert_eq!(
+        registry.select_result(key, one, &id, &"0".repeat(64)).await,
+        Err(RegistryError::CandidateMismatch)
+    );
+    for (target, expected) in [
+        (
+            ExecutionTarget { fence: 9, ..one },
+            RegistryError::StaleFence,
+        ),
+        (
+            ExecutionTarget {
+                policy_digest: "wrong",
+                ..one
+            },
+            RegistryError::CandidateMismatch,
+        ),
+        (
+            ExecutionTarget {
+                execution_id: "unknown",
+                ..one
+            },
+            RegistryError::CandidateMismatch,
+        ),
+    ] {
+        assert_eq!(
+            registry
+                .select_result(key, target, &id, &artifact.manifest_digest)
+                .await,
+            Err(expected),
+        );
+    }
+    assert_eq!(registry.selected_result(key).await.unwrap(), None);
+    let second_upload = store.reserve(permit(23, "worker"), 4).await.unwrap();
+    store
+        .put_part(
+            permit(24, "worker"),
+            &second_upload,
+            0,
+            4,
+            &[0, 1, 2, 255][..],
+        )
+        .await
+        .unwrap();
+    store
+        .finalize(permit(25, "worker"), &second_upload, &canonical)
+        .await
+        .unwrap();
+    let (a, b) = tokio::join!(
+        registry.select_result(key, one, &id, &artifact.manifest_digest),
+        registry.select_result(key, two, &second_upload, &artifact.manifest_digest),
+    );
+    let (winner, target) = match (a, b) {
+        (Ok(result), Err(RegistryError::SelectionConflict)) => (result, one),
+        (Err(RegistryError::SelectionConflict), Ok(result)) => (result, two),
+        _ => panic!("exactly one candidate must win"),
+    };
+    sqlx::query("UPDATE fabric_attempts SET lease_expires_unix_ms = 0 WHERE operation_id = 'op'")
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        registry.selected_result(key).await.unwrap(),
+        Some(winner.clone())
+    );
+    assert_eq!(
+        registry
+            .select_result(key, target, &winner.upload_id, &artifact.manifest_digest)
+            .await,
+        Ok(winner)
+    );
+    assert_eq!(
+        registry.ensure_attempt(key, 1, 2).await,
+        Err(RegistryError::SelectionConflict)
     );
 }

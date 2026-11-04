@@ -1,5 +1,7 @@
 //! PostgreSQL operation and attempt registry for trusted coordinator callers.
 
+mod selection;
+pub use selection::{ExecutionTarget, SelectedResult};
 use serde_json::Value;
 use sqlx::{PgPool, Postgres, Row, Transaction, types::Json};
 
@@ -17,6 +19,8 @@ pub enum RegistryError {
     EpochConflict,
     AttemptExpired,
     StaleFence,
+    CandidateMismatch,
+    SelectionConflict,
     Unavailable,
 }
 
@@ -218,6 +222,9 @@ impl Registry {
         .ok_or(RegistryError::NotFound)?;
         if read_u64(&row, "workflow")? != workflow {
             return Err(RegistryError::StaleWorkflow);
+        }
+        if selection::read_selection(&mut *tx, key).await?.is_some() {
+            return Err(RegistryError::SelectionConflict);
         }
         let deadline = read_u64(&row, "deadline")?;
         let now = sqlx::query_scalar::<_, i64>(
