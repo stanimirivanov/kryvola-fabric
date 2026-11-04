@@ -5,6 +5,7 @@ import json
 import os
 import secrets
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
@@ -69,9 +70,13 @@ def fixture(folder: Path) -> tuple[Path, dict[str, str]]:
     }
     # The socket directory is writable by the container UID. Its private
     # temporary parent blocks access by other host users.
-    socket = folder / "postgres-socket"
-    socket.mkdir()
-    socket.chmod(0o777)
+    pg_socket = folder / "postgres-socket"
+    pg_socket.mkdir()
+    pg_socket.chmod(0o777)
+    # Redpanda advertises its host listener, so Docker needs an explicit port.
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        kafka_port = listener.getsockname()[1]
     compose = folder / "compose.json"
     compose.write_text(
         json.dumps(
@@ -85,13 +90,48 @@ def fixture(folder: Path) -> tuple[Path, dict[str, str]]:
                             "-c",
                             "unix_socket_directories=/var/run/postgresql,/fixture-socket",
                         ],
-                        "volumes": [f"{socket}:/fixture-socket"],
+                        "volumes": [f"{pg_socket}:/fixture-socket"],
                         "environment": {"POSTGRES_PASSWORD": "${FIXTURE_PG_PASSWORD:?required}"},
                         "healthcheck": {
                             "test": ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "postgres"],
                             "interval": "1s",
                             "timeout": "2s",
                             "retries": 60,
+                        },
+                    },
+                    "redpanda": {
+                        "image": "docker.redpanda.com/redpandadata/redpanda@sha256:"
+                        "a9dffb84f388a7a2d4ab1aaa541cd0b9a484f0f5c9b72cb54c551953352769ec",
+                        "networks": ["default", "host-probe"],
+                        "ports": [f"127.0.0.1:{kafka_port}:9092"],
+                        "command": [
+                            "redpanda",
+                            "start",
+                            "--mode",
+                            "dev-container",
+                            "--smp",
+                            "1",
+                            "--memory",
+                            "512M",
+                            "--reserve-memory",
+                            "0M",
+                            "--kafka-addr",
+                            "host://0.0.0.0:9092,local://0.0.0.0:19092",
+                            "--advertise-kafka-addr",
+                            f"host://127.0.0.1:{kafka_port},local://127.0.0.1:19092",
+                        ],
+                        "healthcheck": {
+                            "test": [
+                                "CMD",
+                                "rpk",
+                                "cluster",
+                                "info",
+                                "-X",
+                                "brokers=127.0.0.1:19092",
+                            ],
+                            "interval": "2s",
+                            "timeout": "5s",
+                            "retries": 30,
                         },
                     },
                     "s3": {
@@ -119,7 +159,12 @@ def fixture(folder: Path) -> tuple[Path, dict[str, str]]:
         ),
         encoding="utf-8",
     )
-    return compose, {**os.environ, **client_env, "FIXTURE_PG_PASSWORD": secrets.token_hex(24)}
+    return compose, {
+        **os.environ,
+        **client_env,
+        "FIXTURE_PG_PASSWORD": secrets.token_hex(24),
+        "FABRIC_FIXTURE_KAFKA": f"127.0.0.1:{kafka_port}",
+    }
 
 
 def check_postgres(invoke: Invoke) -> None:
@@ -262,6 +307,28 @@ def run(folder: Path) -> None:
             AWS_ACCESS_KEY_ID=env["AWS_ACCESS_KEY_ID"],
             AWS_SECRET_ACCESS_KEY=env["AWS_SECRET_ACCESS_KEY"],
         )
+        for topic, retention in [("fabric-events", "86400000"), ("fabric-events-dead", "3600000")]:
+            require(
+                invoke(
+                    "exec",
+                    "-T",
+                    "redpanda",
+                    "rpk",
+                    "topic",
+                    "create",
+                    topic,
+                    "-X",
+                    "brokers=127.0.0.1:19092",
+                    "--topic-config",
+                    "max.message.bytes=65536",
+                    "--topic-config",
+                    f"retention.ms={retention}",
+                ),
+                "Redpanda topic creation",
+            )
+        check_registry(
+            folder, "outbox_round_trip", FABRIC_FIXTURE_KAFKA=env["FABRIC_FIXTURE_KAFKA"]
+        )
     finally:
         require(
             invoke("down", "--volumes", "--remove-orphans", timeout=90),
@@ -287,7 +354,7 @@ def main() -> int:
     except (OSError, subprocess.TimeoutExpired, KeyboardInterrupt) as error:
         print(f"Runtime integration: {type(error).__name__}", file=sys.stderr)
         return 1
-    print("Runtime integration passed: PostgreSQL registry and S3 conditional writes.")
+    print("Runtime integration passed: PostgreSQL, SeaweedFS, and Redpanda.")
     return 0
 
 

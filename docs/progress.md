@@ -206,3 +206,24 @@ the same deletion path.
 Operators can preview eligibility before invoking deletion. Scheduling and
 bucket lifecycle handling for objects that arrive after a timed-out remote
 write are separate concerns. Keep the staging bucket private.
+
+## M1-PR12 transactional notifications
+
+The operation, selection, cancellation and recovery transactions enqueue
+versioned wakeups in PostgreSQL. The migration backfills existing state. The
+relay marks a row published only after Redpanda acknowledges the send. The
+tenant and operation determine the partition key. Consumers must tolerate
+duplicates and reordering, and read current registry state before acting.
+
+The consumer validates bounded, header-free records against the retained outbox
+and inserts one durable inbox row per subscriber and event. It acknowledges
+the Kafka offset after the database commit. A failed or interrupted receive
+requires reopening the consumer from its committed offset. Requeue retained
+outbox rows to repair missed notifications. A rejected record goes to the
+dead-letter topic with a fixed code and no original payload or key.
+
+Configure broker topics with a 64 KiB record limit. The local Redpanda fixture
+uses 24-hour event retention and one-hour dead-letter retention. It exposes a
+temporary loopback listener. Production topic provisioning, identities, inbox
+draining and Temporal wakeup processing belong to later slices. PostgreSQL
+retains the outbox and inbox in this slice. Kafka delivery is at least once.

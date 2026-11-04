@@ -137,6 +137,7 @@ impl Registry {
             }
         })?;
         retire(&mut tx, key).await?;
+        super::events::enqueue(&mut tx, key, "cancelled").await?;
         tx.commit().await?;
         Ok(fence)
     }
@@ -170,6 +171,7 @@ impl Registry {
         ).bind(key.tenant_scope).bind(key.operation_id).bind(fence.to_string())
             .bind(successor_epoch.to_string()).execute(&mut *tx).await?;
         retire(&mut tx, key).await?;
+        super::events::enqueue(&mut tx, key, "recovery_fenced").await?;
         tx.commit().await?;
         Ok(RecoveryFence {
             fence,
