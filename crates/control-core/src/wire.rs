@@ -66,10 +66,23 @@ impl ControlValidator {
                     .skip_default_fields(false),
             )
             .map_err(|_| ControlError::InvalidControl)?;
-        if !schema.is_valid(&value) || !consistent(&value) {
+        Self::validate_value(schema, &value)?;
+        Ok(value)
+    }
+
+    pub(crate) fn validate_operation(&self, value: &Json) -> Result<(), ControlError> {
+        let schema = self
+            .schemas
+            .get("Operation")
+            .ok_or(ControlError::InvalidAssets)?;
+        Self::validate_value(schema, value)
+    }
+
+    fn validate_value(schema: &jsonschema::Validator, value: &Json) -> Result<(), ControlError> {
+        if !schema.is_valid(value) || !consistent(value) {
             return Err(ControlError::InvalidControl);
         }
-        Ok(value)
+        Ok(())
     }
     /// Metadata is complete application framing/headers excluding the supplied payloads.
     pub fn temporal_call(

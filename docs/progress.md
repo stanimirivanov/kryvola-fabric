@@ -102,3 +102,25 @@ the new leaf. A trust-root change requires a restart. The runtime logs fixed
 denial codes and has no policy cache. The authorization response contains only
 the expiry, and no runtime route serves artifact bytes. Later registry handlers
 must independently check current attempt and fence state before mutation.
+
+## M1-PR6 PostgreSQL operation registry
+
+The internal Rust registry stores validated immutable operation intent and ordered
+input manifest digests. Both operation IDs and idempotency keys are unique within
+a tenant. Identical retries return the stored intent. Changed intent conflicts.
+Apply the embedded additive migration before serving registry traffic. Roll back
+the caller code without dropping the tables or their history.
+
+The coordinator locks the operation row before admitting or renewing an attempt.
+An explicit workflow decision supplies the next contiguous attempt epoch, starting
+at one. Its fence equals that epoch within the immutable operation/workflow.
+Leases use PostgreSQL time and expire after at most 30 seconds, capped by the
+operation deadline. An observed expired attempt is marked retired before the
+registry returns. Retired epochs survive reconnect and PostgreSQL restart. Use a
+reliable database clock for lease deadlines.
+
+The live gate checks the Rust registry over a Unix socket in its private fixture
+directory. It restarts PostgreSQL and checks persisted state from a new process.
+The registry is an internal API for authorized coordinator callers. The HTTP
+shell still denies operation routes until an authenticated caller is wired in.
+Selection, cancellation and release are separate slices.

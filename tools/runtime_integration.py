@@ -67,6 +67,11 @@ def fixture(folder: Path) -> tuple[Path, dict[str, str]]:
         "AWS_RESPONSE_CHECKSUM_VALIDATION": "when_required",
         "AWS_MAX_ATTEMPTS": "1",
     }
+    # The socket directory is writable by the container UID. Its private
+    # temporary parent blocks access by other host users.
+    socket = folder / "postgres-socket"
+    socket.mkdir()
+    socket.chmod(0o777)
     compose = folder / "compose.json"
     compose.write_text(
         json.dumps(
@@ -75,6 +80,12 @@ def fixture(folder: Path) -> tuple[Path, dict[str, str]]:
                 "services": {
                     "postgres": {
                         "image": POSTGRES,
+                        "command": [
+                            "postgres",
+                            "-c",
+                            "unix_socket_directories=/var/run/postgresql,/fixture-socket",
+                        ],
+                        "volumes": [f"{socket}:/fixture-socket"],
                         "environment": {"POSTGRES_PASSWORD": "${FIXTURE_PG_PASSWORD:?required}"},
                         "healthcheck": {
                             "test": ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "postgres"],
@@ -181,6 +192,35 @@ def check_s3(invoke: Invoke) -> None:
         raise RuntimeError("S3 conditional overwrite changed the stored bytes")
 
 
+def check_registry(folder: Path, test: str) -> None:
+    root = Path(__file__).resolve().parents[1]
+    env = {**os.environ, "FABRIC_FIXTURE_PG_SOCKET": str(folder / "postgres-socket")}
+    result = subprocess.run(
+        [
+            "cargo",
+            "test",
+            "--locked",
+            "-p",
+            "kryvola-fabric-core",
+            "--test",
+            "registry",
+            "--",
+            "--ignored",
+            "--exact",
+            test,
+        ],
+        cwd=root,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=180,
+        check=False,
+    )
+    output = require(result, f"Registry probe {test}")
+    if "1 passed; 0 failed" not in output:
+        raise RuntimeError(f"Registry probe {test} did not run")
+
+
 def run(folder: Path) -> None:
     host = os.environ.get("DOCKER_HOST", "")
     if host and not host.startswith("unix://"):
@@ -201,6 +241,13 @@ def run(folder: Path) -> None:
     try:
         require(invoke("up", "-d", "--wait", "--wait-timeout=90", timeout=600), "Fixture startup")
         check_postgres(invoke)
+        check_registry(folder, "durable_registry")
+        require(invoke("restart", "postgres", timeout=90), "PostgreSQL restart")
+        require(
+            invoke("up", "-d", "--wait", "--wait-timeout=90", timeout=120),
+            "Fixture restart readiness",
+        )
+        check_registry(folder, "registry_survives_postgres_restart")
         check_s3(invoke)
     finally:
         require(
@@ -227,7 +274,7 @@ def main() -> int:
     except (OSError, subprocess.TimeoutExpired, KeyboardInterrupt) as error:
         print(f"Runtime integration: {type(error).__name__}", file=sys.stderr)
         return 1
-    print("Runtime integration passed: PostgreSQL transactions and S3 conditional writes.")
+    print("Runtime integration passed: PostgreSQL registry and S3 conditional writes.")
     return 0
 
 
