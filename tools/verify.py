@@ -28,6 +28,10 @@ def main() -> None:
         run("cargo", "fmt", "--all", "--check")
         run("cargo", "clippy", "--locked", "--workspace", "--all-targets", "--", "-D", "warnings")
     if args.level == "full":
+        if REPO == "kryvola-fabric":
+            run(
+                "cargo", "build", "--locked", "-p", "kryvola-fabric-core", "--bin", "fabric-runtime"
+            )
         run(sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v")
         if REPO in {"kryvola-fabric", "kryvola-engines"}:
             run("cargo", "test", "--locked", "--workspace")

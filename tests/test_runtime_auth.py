@@ -16,12 +16,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class RuntimeAuthorizationTests(unittest.TestCase):
     def test_verified_workload_and_exact_scope(self):
-        subprocess.run(
-            ["cargo", "build", "--locked", "-p", "kryvola-fabric-core", "--bin", "fabric-runtime"],
-            cwd=ROOT,
-            check=True,
-            timeout=120,
-        )
+        target = ROOT / os.environ.get("CARGO_TARGET_DIR", "target")
+        binary = target / "debug/fabric-runtime"
+        self.assertTrue(binary.is_file(), "Build fabric-runtime with cargo build --locked first")
         with tempfile.TemporaryDirectory() as directory:
             folder = Path(directory)
 
@@ -83,9 +80,6 @@ class RuntimeAuthorizationTests(unittest.TestCase):
                     "-out",
                     f"{name}.pem",
                 )
-            binary = (
-                Path(os.environ.get("CARGO_TARGET_DIR", ROOT / "target")) / "debug/fabric-runtime"
-            )
             with subprocess.Popen(
                 [str(binary), "--mtls", "server.pem", "server.key", "ca.pem", "policy.json"],
                 cwd=folder,
