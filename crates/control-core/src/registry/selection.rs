@@ -171,6 +171,17 @@ impl Registry {
             return Err(error);
         }
 
+        // Serialize the artifact pin with reclamation. Keep the operation -> upload lock order.
+        let reclaiming: Option<bool> = sqlx::query_scalar(
+            "SELECT reclaiming FROM fabric_uploads WHERE id = $1 AND tenant_scope = $2 FOR UPDATE",
+        )
+        .bind(upload_id)
+        .bind(key.tenant_scope)
+        .fetch_optional(&mut *tx)
+        .await?;
+        if reclaiming != Some(false) {
+            return Err(RegistryError::CandidateMismatch);
+        }
         let scope = serde_json::json!({
             "manifest_digest": manifest_digest, "purpose": "COMPUTE_WRITE",
             "attempt": {
