@@ -54,3 +54,26 @@ Observed local formatting/lint/type and offline publication tests are recorded
 in the PR alongside the full pre-PR CI result. No package has been published by
 this implementation; source/generated contracts and runtime dependencies remain
 unchanged. M0-PR31 remains dependent on actual reviewed publication and pins.
+
+## M1-PR4 runtime foundation
+
+`cargo run --locked -p kryvola-fabric-core --bin fabric-runtime` prints its
+ephemeral IPv4 loopback address. `GET /healthz` accepts an empty body and reports
+process health. Other routes deny access. The shell caps request bodies at
+64 KiB, including chunked requests, and times out body reads after two seconds.
+Its application errors are fixed JSON messages.
+
+Run the live fixture gate on a local Linux x86_64 Docker Engine with Compose:
+
+```sh
+uv run --locked --extra conformance python tools/runtime_integration.py ci
+```
+
+The gate uses digest-pinned PostgreSQL, SeaweedFS and AWS CLI images in a unique
+internal Compose project. It publishes no ports and generates private, temporary
+credentials for each run. It checks SQL commit and rollback, S3 conditional
+create, the rejection of a second write, and preservation of the original bytes.
+It tears down its project and volumes on success or failure. Full verification
+runs this gate alongside the Rust socket tests. The PostgreSQL and S3 probes
+exercise the services directly. Runtime clients and authenticated endpoints
+belong to later slices.

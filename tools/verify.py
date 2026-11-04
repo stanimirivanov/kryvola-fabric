@@ -46,6 +46,7 @@ def main() -> None:
             "--temporal-cli",
             str(ROOT / "build/temporal/temporal"),
         )
+        run(sys.executable, "tools/runtime_integration.py", "ci")
         run(sys.executable, "tools/release.py", "qualify")
 
 
