@@ -1,5 +1,7 @@
 //! PostgreSQL operation and attempt registry for trusted coordinator callers.
 
+mod barriers;
+pub use barriers::{Cancellation, RecoveryFence};
 mod selection;
 pub use selection::{ExecutionTarget, SelectedResult};
 use serde_json::Value;
@@ -21,6 +23,8 @@ pub enum RegistryError {
     StaleFence,
     CandidateMismatch,
     SelectionConflict,
+    Cancelled,
+    RecoveryFenced,
     Unavailable,
 }
 
@@ -223,6 +227,7 @@ impl Registry {
         if read_u64(&row, "workflow")? != workflow {
             return Err(RegistryError::StaleWorkflow);
         }
+        barriers::require_open(&mut tx, key).await?;
         if selection::read_selection(&mut *tx, key).await?.is_some() {
             return Err(RegistryError::SelectionConflict);
         }

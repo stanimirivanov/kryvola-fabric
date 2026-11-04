@@ -63,6 +63,7 @@ async fn lock_context(
     )
     .bind(key.tenant_scope).bind(key.operation_id)
     .fetch_optional(&mut **tx).await?.ok_or(RegistryError::NotFound)?;
+    super::barriers::require_open(tx, key).await?;
     if operation["workflow_epoch"].as_str() != Some(&target.workflow_epoch.to_string()) {
         return Err(RegistryError::StaleWorkflow);
     }
