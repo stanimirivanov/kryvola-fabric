@@ -159,3 +159,17 @@ out-of-band replacement of immutable objects. A failed finalization can leave
 unreachable private copies for the later reclamation slice. The live test uses
 the pinned Spec golden vector and checks corruption, incomplete input, retry
 after an interrupted copy, and concurrent finalization against PostgreSQL and S3.
+
+## M1-PR9 fenced result selection
+
+The internal coordinator registry registers physical execution IDs under a live
+attempt. Selection locks the operation row, checks workflow, fence, plan and
+policy, and requires a finalized artifact whose upload scope and manifest key
+context match. The authenticated coordinator supplies the execution-to-upload
+association. Selection rechecks lease expiry using PostgreSQL time when it
+inserts the winner.
+
+The single selection row pins the finalized artifact through a foreign key.
+A matching retry and lookup return the winner after lease expiry. Conflicting
+candidates and new attempts cannot replace it. The selection remains internal
+metadata. Cancellation, release and public transport wiring are later slices.
