@@ -1,7 +1,9 @@
 //! PostgreSQL operation and attempt registry for trusted coordinator callers.
 
 mod barriers;
+mod events;
 pub use barriers::{Cancellation, RecoveryFence};
+pub use events::{Broker, Delivery};
 mod selection;
 pub use selection::{ExecutionTarget, SelectedResult};
 use serde_json::Value;
@@ -150,7 +152,7 @@ impl Registry {
     pub async fn create_operation(&self, intent: &OperationIntent) -> Result<OperationRecord> {
         let mut tx = self.pool.begin().await?;
         let key = intent.key();
-        sqlx::query(
+        let inserted = sqlx::query(
             "INSERT INTO fabric_operations (tenant_scope, operation_id, idempotency_key, intent, inputs) \
              VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING",
         )
@@ -172,6 +174,9 @@ impl Registry {
         let saved = read_operation(row)?;
         if saved != *intent.record() {
             return Err(RegistryError::IdempotencyConflict);
+        }
+        if inserted.rows_affected() == 1 {
+            events::enqueue(&mut tx, key, "operation_created").await?;
         }
         tx.commit().await?;
         Ok(saved)

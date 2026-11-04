@@ -218,6 +218,7 @@ impl Registry {
             tx.commit().await?;
             return Err(status.err().unwrap_or(RegistryError::CandidateMismatch));
         }
+        super::events::enqueue(&mut tx, key, "result_selected").await?;
         tx.commit().await?;
         Ok(result)
     }

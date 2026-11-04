@@ -609,3 +609,89 @@ async fn bounded_uploads() {
     );
     assert_eq!(reopened.cancel_operation(key, "cancel-op").await, left);
 }
+
+#[tokio::test]
+#[ignore = "requires the PostgreSQL and Redpanda instances from the live gate"]
+async fn outbox_round_trip() {
+    use kryvola_fabric_core::registry::{Broker, Delivery};
+    use rdkafka::{
+        ClientConfig,
+        producer::{FutureProducer, FutureRecord},
+    };
+    use std::time::Duration;
+
+    let pool = PgPoolOptions::new()
+        .connect_with(fixture_options())
+        .await
+        .unwrap();
+    let registry = Registry::new(pool.clone());
+    registry.migrate().await.unwrap();
+    let mut config = ClientConfig::new();
+    config.set(
+        "bootstrap.servers",
+        std::env::var("FABRIC_FIXTURE_KAFKA").unwrap(),
+    );
+    let mut broker =
+        Broker::new(&config, "fabric-events", "fabric-events-dead", "fixture").unwrap();
+    assert!(registry.publish_one(&broker).await.unwrap());
+    // Simulate a send acknowledged by Kafka before PostgreSQL recorded it.
+    sqlx::query("UPDATE fabric_outbox SET published = false")
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(registry.publish_one(&broker).await.unwrap());
+    assert_eq!(
+        registry.consume_one(&mut broker).await.unwrap(),
+        Delivery::Accepted
+    );
+    assert_eq!(
+        registry.consume_one(&mut broker).await.unwrap(),
+        Delivery::Duplicate
+    );
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM fabric_inbox")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 1);
+    let kinds: i64 = sqlx::query_scalar("SELECT count(DISTINCT kind) FROM fabric_outbox")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(kinds, 4);
+
+    // A group with a committed inbox row but no committed Kafka offset replays it.
+    sqlx::query("INSERT INTO fabric_inbox SELECT 'fixture-restart', event_id FROM fabric_inbox WHERE subscriber = 'fixture'")
+        .execute(&pool).await.unwrap();
+    let mut restarted = Broker::new(
+        &config,
+        "fabric-events",
+        "fabric-events-dead",
+        "fixture-restart",
+    )
+    .unwrap();
+    assert_eq!(
+        registry.consume_one(&mut restarted).await.unwrap(),
+        Delivery::Duplicate
+    );
+
+    let producer: FutureProducer = config.create().unwrap();
+    producer
+        .send(
+            FutureRecord::to("fabric-events")
+                .key("untrusted")
+                .payload(br#"{"credentials":"must not reach the DLQ"}"#),
+            Duration::from_secs(5),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        registry.consume_one(&mut broker).await.unwrap(),
+        Delivery::Rejected
+    );
+    let count: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM fabric_inbox WHERE subscriber = 'fixture'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(count, 1);
+}
