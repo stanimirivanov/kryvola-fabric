@@ -460,10 +460,73 @@ async fn bounded_uploads() {
         registry
             .select_result(key, target, &winner.upload_id, &artifact.manifest_digest)
             .await,
-        Ok(winner)
+        Ok(winner.clone())
     );
     assert_eq!(
         registry.ensure_attempt(key, 1, 2).await,
         Err(RegistryError::SelectionConflict)
     );
+    use kryvola_fabric_core::registry::Cancellation;
+    let (left, right, selection) = tokio::join!(
+        registry.cancel_operation(key, "cancel-op"),
+        registry.cancel_operation(key, "cancel-op"),
+        registry.select_result(key, target, &winner.upload_id, &artifact.manifest_digest),
+    );
+    assert!(selection == Ok(winner.clone()) || selection == Err(RegistryError::Cancelled));
+    assert_eq!(
+        registry.selected_result(key).await.unwrap(),
+        Some(winner.clone())
+    );
+    assert_eq!(
+        registry
+            .select_result(key, target, &winner.upload_id, &artifact.manifest_digest)
+            .await,
+        Err(RegistryError::Cancelled)
+    );
+    assert_eq!(
+        registry.register_execution(key, target).await,
+        Err(RegistryError::Cancelled)
+    );
+    assert_eq!(left, Ok(Cancellation::Cancelled { fence: 2 }));
+    assert_eq!(right.unwrap(), Cancellation::Cancelled { fence: 2 });
+    assert_eq!(
+        registry.ensure_attempt(key, 1, 2).await,
+        Err(RegistryError::Cancelled)
+    );
+
+    let old = OperationKey {
+        tenant_scope: "tenant-fixture",
+        operation_id: "operation-1",
+    };
+    let barrier = registry.fence_for_recovery(old, 0).await.unwrap();
+    assert!(barrier.fence > 2);
+    assert_eq!(barrier.successor_epoch, 1);
+    assert_eq!(registry.fence_for_recovery(old, 0).await, Ok(barrier));
+    assert_eq!(
+        registry.ensure_attempt(old, 0, 3).await,
+        Err(RegistryError::RecoveryFenced)
+    );
+    assert_eq!(
+        registry.cancel_operation(old, "cancel-op").await,
+        Err(RegistryError::IdempotencyConflict)
+    );
+    let recovered_cancel = registry.cancel_operation(old, "cancel-old").await.unwrap();
+    assert_eq!(
+        recovered_cancel,
+        Cancellation::Cancelled {
+            fence: barrier.fence + 1
+        }
+    );
+    pool.close().await;
+    assert_eq!(
+        registry.cancel_operation(key, "cancel-op").await,
+        Ok(Cancellation::Pending)
+    );
+    let reopened = Registry::new(
+        PgPoolOptions::new()
+            .connect_with(fixture_options())
+            .await
+            .unwrap(),
+    );
+    assert_eq!(reopened.cancel_operation(key, "cancel-op").await, left);
 }

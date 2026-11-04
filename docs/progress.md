@@ -173,3 +173,19 @@ The single selection row pins the finalized artifact through a foreign key.
 A matching retry and lookup return the winner after lease expiry. Conflicting
 candidates and new attempts cannot replace it. The selection remains internal
 metadata. Cancellation, release and public transport wiring are later slices.
+
+## M1-PR10 cancellation and recovery barriers
+
+The coordinator locks the operation row shared by lease, execution and selection
+writes. Cancellation retires the attempts and commits a tombstone and a higher
+fence in the same transaction. A retry with the same tenant, operation and
+idempotency key returns the recorded fence. An unconfirmed database outcome
+returns pending, so callers can retry without assuming cancellation took effect.
+
+Recovery records the next workflow epoch and retires the old operation behind a
+higher fence. This records quarantine only. Successor admission requires later
+reconciliation and explicit workflow authorization. Cancellation can supersede
+the recovery barrier, while a cancelled operation cannot enter recovery.
+Committed selection and its pin remain as history. Future release handlers must
+check the barrier under the operation lock. Public authentication and Temporal
+cleanup remain separate slices.
