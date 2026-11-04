@@ -76,7 +76,7 @@ def fixture(folder: Path) -> tuple[Path, dict[str, str]]:
     compose.write_text(
         json.dumps(
             {
-                "networks": {"default": {"internal": True}},
+                "networks": {"default": {"internal": True}, "host-probe": {}},
                 "services": {
                     "postgres": {
                         "image": POSTGRES,
@@ -96,6 +96,8 @@ def fixture(folder: Path) -> tuple[Path, dict[str, str]]:
                     },
                     "s3": {
                         "image": SEAWEED,
+                        "ports": ["127.0.0.1::8333"],
+                        "networks": ["default", "host-probe"],
                         "entrypoint": ["/bin/sh", "-ec"],
                         "command": [
                             "cp /fixture.json /data/fixture-s3.json; "
@@ -192,9 +194,9 @@ def check_s3(invoke: Invoke) -> None:
         raise RuntimeError("S3 conditional overwrite changed the stored bytes")
 
 
-def check_registry(folder: Path, test: str) -> None:
+def check_registry(folder: Path, test: str, **settings: str) -> None:
     root = Path(__file__).resolve().parents[1]
-    env = {**os.environ, "FABRIC_FIXTURE_PG_SOCKET": str(folder / "postgres-socket")}
+    env = {**os.environ, "FABRIC_FIXTURE_PG_SOCKET": str(folder / "postgres-socket"), **settings}
     result = subprocess.run(
         [
             "cargo",
@@ -249,6 +251,17 @@ def run(folder: Path) -> None:
         )
         check_registry(folder, "registry_survives_postgres_restart")
         check_s3(invoke)
+        endpoint = require(invoke("port", "s3", "8333"), "S3 loopback endpoint").strip()
+        host, _, port = endpoint.rpartition(":")
+        if host != "127.0.0.1" or not port.isascii() or not port.isdecimal():
+            raise RuntimeError("S3 fixture endpoint must be loopback")
+        check_registry(
+            folder,
+            "bounded_uploads",
+            FABRIC_FIXTURE_S3_ENDPOINT=f"http://{endpoint}",
+            AWS_ACCESS_KEY_ID=env["AWS_ACCESS_KEY_ID"],
+            AWS_SECRET_ACCESS_KEY=env["AWS_SECRET_ACCESS_KEY"],
+        )
     finally:
         require(
             invoke("down", "--volumes", "--remove-orphans", timeout=90),

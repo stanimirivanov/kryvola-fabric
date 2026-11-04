@@ -70,7 +70,7 @@ uv run --locked --extra conformance python tools/runtime_integration.py ci
 ```
 
 The gate uses digest-pinned PostgreSQL, SeaweedFS and AWS CLI images in a unique
-internal Compose project. It publishes no ports and generates private, temporary
+internal Compose project. It publishes no non-loopback ports and generates private, temporary
 credentials for each run. It checks SQL commit and rollback, S3 conditional
 create, the rejection of a second write, and preservation of the original bytes.
 It tears down its project and volumes on success or failure. Full verification
@@ -124,3 +124,21 @@ directory. It restarts PostgreSQL and checks persisted state from a new process.
 The registry is an internal API for authorized coordinator callers. The HTTP
 shell still denies operation routes until an authenticated caller is wired in.
 Selection, cancellation and release are separate slices.
+
+## M1-PR7 bounded artifact staging
+
+The internal upload store redeems compute-write grants and binds a reservation to
+the exact workload certificate and request scope. PostgreSQL serializes quota
+admission per tenant and part writes per upload. A part is capped at 4 MiB, must
+match its declared length, and uses conditional S3 creation. The caller supplies
+a bounded PostgreSQL pool, a private S3 store, and the tenant quota. Each part
+holds at most its declared bytes plus one byte while checking for overflow.
+
+Abort removes the private staging prefix before releasing the reservation. A
+failed or ambiguous S3 write stays outside the artifact namespace. A caller can
+abort and start a new upload after an ambiguous write. Background reclamation
+of abandoned prefixes and immutable finalization belong to later slices.
+
+The live gate now exposes the fixture S3 service on an ephemeral IPv4 loopback
+port for the Rust client. PostgreSQL remains on the private Unix socket. No
+public upload route or readable artifact reference is introduced.
