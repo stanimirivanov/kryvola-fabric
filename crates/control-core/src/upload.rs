@@ -12,11 +12,13 @@ use tokio::{
 };
 
 mod finalize;
+mod retention;
 use crate::{
     authorization::UploadPermit,
     limits::{ARTIFACT_MAX_BYTES, CHUNK_MAX_BYTES},
 };
 pub use finalize::FinalizedArtifact;
+pub use retention::PinKind;
 
 const IO_TIMEOUT: Duration = Duration::from_secs(15);
 type Result<T> = std::result::Result<T, UploadError>;
@@ -155,7 +157,7 @@ impl UploadStore {
             | object_store::Error::Precondition { .. } => UploadError::Conflict,
             _ => UploadError::Unavailable,
         })?;
-        sqlx::query("UPDATE fabric_uploads SET received_bytes = received_bytes + $2 WHERE id = $1")
+        sqlx::query("UPDATE fabric_uploads SET received_bytes = received_bytes + $2, touched_at = clock_timestamp() WHERE id = $1")
             .bind(id)
             .bind(declared as i64)
             .execute(&mut *tx)
@@ -170,26 +172,9 @@ impl UploadStore {
         if is_finalized(&mut tx, id).await? {
             return Err(UploadError::Conflict);
         }
-        let prefix = Path::from(format!("staging/{id}"));
-        let paths = self
-            .objects
-            .list(Some(&prefix))
-            .map_ok(|entry| entry.location);
-        // Stream removal so cleanup never accumulates the complete key listing.
-        timeout(
-            IO_TIMEOUT,
-            self.objects
-                .delete_stream(Box::pin(paths))
-                .try_for_each(|_| async { Ok(()) }),
-        )
-        .await
-        .map_err(|_| UploadError::Unavailable)?
-        .map_err(|_| UploadError::Unavailable)?;
-        sqlx::query("DELETE FROM fabric_uploads WHERE id = $1")
-            .bind(id)
-            .execute(&mut *tx)
-            .await?;
+        retention::mark(&mut tx, id).await?;
         tx.commit().await?;
+        self.sweep(id).await?;
         Ok(())
     }
 }
@@ -209,7 +194,7 @@ async fn lock_upload(
     }
     let row = sqlx::query(
         "SELECT reserved_bytes, reserved_bytes - received_bytes AS remaining FROM fabric_uploads \
-         WHERE id = $1 AND tenant_scope = $2 AND certificate = $3 AND scope = $4 FOR UPDATE",
+         WHERE id = $1 AND tenant_scope = $2 AND certificate = $3 AND scope = $4 AND NOT reclaiming FOR UPDATE",
     )
     .bind(id)
     .bind(&permit.tenant)

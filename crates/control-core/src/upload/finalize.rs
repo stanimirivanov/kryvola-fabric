@@ -245,6 +245,10 @@ impl UploadStore {
             .bind(canonical)
             .execute(&mut *tx)
             .await?;
+        sqlx::query("UPDATE fabric_uploads SET touched_at = clock_timestamp() WHERE id = $1")
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
         tx.commit().await?;
         Ok(reference)
     }

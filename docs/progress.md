@@ -189,3 +189,20 @@ the recovery barrier, while a cancelled operation cannot enter recovery.
 Committed selection and its pin remain as history. Future release handlers must
 check the barrier under the operation lock. Public authentication and Temporal
 cleanup remain separate slices.
+
+## M1-PR11 artifact retention and reclamation
+
+The internal retention API records expiring workflow, key-context and audit
+pins. Repeating a pin can extend its expiry. A selected result remains pinned
+by its registry foreign key. The dry run reports up to 100 eligible uploads
+using PostgreSQL time and the caller's retention window.
+
+Explicit reclamation locks the upload row, rechecks eligibility, and commits
+a deletion marker before touching S3. Pinning, selection and staging share
+that lock. A retry resumes marked cleanup. Quota returns only after both
+private prefixes are cleared and the database rows are deleted. Abort uses
+the same deletion path.
+
+Operators can preview eligibility before invoking deletion. Scheduling and
+bucket lifecycle handling for objects that arrive after a timed-out remote
+write are separate concerns. Keep the staging bucket private.

@@ -199,7 +199,7 @@ async fn bounded_uploads() {
             &path,
             json!({"boot_id":auth.boot_id(),"grants":[{
                 "certificate_sha256":certificate,"token_sha256":sha256_hex(token.as_bytes()),
-                "scope":scope_json,"expires_unix_ms":now+55_000
+                "scope":scope_json,"expires_unix_ms":SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64+55_000
             }]})
             .to_string(),
         )
@@ -516,6 +516,85 @@ async fn bounded_uploads() {
         Cancellation::Cancelled {
             fence: barrier.fence + 1
         }
+    );
+
+    use kryvola_fabric_core::upload::PinKind;
+    let loser = if winner.upload_id == id {
+        &second_upload
+    } else {
+        &id
+    };
+    let abandoned = store.reserve(permit(26, "worker"), 1).await.unwrap_err();
+    assert_eq!(abandoned, UploadError::Quota);
+    sqlx::query("UPDATE fabric_uploads SET touched_at = clock_timestamp() - interval '2 hours'")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let expires = (SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis()
+        + 30_000) as i64;
+    store
+        .pin("tenant-fixture", loser, PinKind::Workflow, "job-1", expires)
+        .await
+        .unwrap();
+    assert!(!store.reclaim(loser, 60).await.unwrap());
+    assert!(!store.reclaim(&winner.upload_id, 60).await.unwrap());
+    sqlx::query("UPDATE fabric_artifact_pins SET expires_unix_ms = 0")
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(
+        store
+            .eligible_for_reclaim(60)
+            .await
+            .unwrap()
+            .contains(loser)
+    );
+    let (pin, reclaim) = tokio::join!(
+        store.pin("tenant-fixture", loser, PinKind::Audit, "audit-1", expires),
+        store.reclaim(loser, 60),
+    );
+    match (pin, reclaim) {
+        (Ok(()), Ok(false)) => {
+            sqlx::query("UPDATE fabric_artifact_pins SET expires_unix_ms = 0")
+                .execute(&pool)
+                .await
+                .unwrap();
+            assert!(store.reclaim(loser, 60).await.unwrap());
+        }
+        (Err(UploadError::Denied), Ok(true)) => {}
+        _ => panic!("pin and delete cannot both succeed"),
+    }
+    assert!(!store.reclaim(loser, 60).await.unwrap());
+    assert!(
+        objects
+            .list(Some(&Path::from(format!("immutable/{loser}"))))
+            .try_next()
+            .await
+            .unwrap()
+            .is_none()
+    );
+    let abandoned = store.reserve(permit(27, "worker"), 1).await.unwrap();
+    store
+        .put_part(permit(28, "worker"), &abandoned, 0, 1, &b"x"[..])
+        .await
+        .unwrap();
+    // Simulate an interrupted sweep after committing the deletion fence.
+    sqlx::query("UPDATE fabric_uploads SET reclaiming = true WHERE id = $1")
+        .bind(&abandoned)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(store.reclaim(&abandoned, 60).await.unwrap());
+    assert!(
+        objects
+            .list(Some(&Path::from(format!("staging/{abandoned}"))))
+            .try_next()
+            .await
+            .unwrap()
+            .is_none()
     );
     pool.close().await;
     assert_eq!(
