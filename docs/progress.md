@@ -142,3 +142,20 @@ of abandoned prefixes and immutable finalization belong to later slices.
 The live gate now exposes the fixture S3 service on an ephemeral IPv4 loopback
 port for the Rust client. PostgreSQL remains on the private Unix socket. No
 public upload route or readable artifact reference is introduced.
+
+## M1-PR8 immutable artifact finalization
+
+The internal finalizer validates the pinned v2 manifest schema and canonical bytes,
+then checks the tenant and manifest commitment against the upload grant. It reads
+one bounded part at a time, verifies each part and the ordered blob with BLAKE3,
+and conditionally creates private immutable objects. PostgreSQL publishes the
+metadata handle only after verification and object creation succeed. A retry
+checks any preexisting destination part before reusing it. Finalized uploads
+reject part writes and aborts.
+
+The returned handle is metadata for internal callers. It grants no read or
+release rights. The deployment must keep both object prefixes private and prevent
+out-of-band replacement of immutable objects. A failed finalization can leave
+unreachable private copies for the later reclamation slice. The live test uses
+the pinned Spec golden vector and checks corruption, incomplete input, retry
+after an interrupted copy, and concurrent finalization against PostgreSQL and S3.

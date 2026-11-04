@@ -11,10 +11,12 @@ use tokio::{
     time::timeout,
 };
 
+mod finalize;
 use crate::{
     authorization::UploadPermit,
     limits::{ARTIFACT_MAX_BYTES, CHUNK_MAX_BYTES},
 };
+pub use finalize::FinalizedArtifact;
 
 const IO_TIMEOUT: Duration = Duration::from_secs(15);
 type Result<T> = std::result::Result<T, UploadError>;
@@ -25,6 +27,7 @@ pub enum UploadError {
     Size,
     Quota,
     Conflict,
+    Integrity,
     Unavailable,
 }
 
@@ -107,7 +110,11 @@ impl UploadStore {
             return Err(UploadError::Size);
         }
         let mut tx = self.pool.begin().await?;
-        let remaining = lock_upload(&mut tx, &permit, id).await?;
+        let upload = lock_upload(&mut tx, &permit, id).await?;
+        if is_finalized(&mut tx, id).await? {
+            return Err(UploadError::Conflict);
+        }
+        let remaining: i64 = upload.try_get("remaining")?;
         // The marker and byte accounting are committed only after object creation.
         let inserted =
             sqlx::query("INSERT INTO fabric_upload_parts VALUES ($1, $2) ON CONFLICT DO NOTHING")
@@ -160,6 +167,9 @@ impl UploadStore {
     pub async fn abort(&self, permit: UploadPermit, id: &str) -> Result<()> {
         let mut tx = self.pool.begin().await?;
         lock_upload(&mut tx, &permit, id).await?;
+        if is_finalized(&mut tx, id).await? {
+            return Err(UploadError::Conflict);
+        }
         let prefix = Path::from(format!("staging/{id}"));
         let paths = self
             .objects
@@ -188,7 +198,7 @@ async fn lock_upload(
     tx: &mut Transaction<'_, Postgres>,
     permit: &UploadPermit,
     id: &str,
-) -> Result<i64> {
+) -> Result<sqlx::postgres::PgRow> {
     check_permit(permit)?;
     if id.len() != 32
         || !id
@@ -198,7 +208,7 @@ async fn lock_upload(
         return Err(UploadError::Denied);
     }
     let row = sqlx::query(
-        "SELECT reserved_bytes - received_bytes AS remaining FROM fabric_uploads \
+        "SELECT reserved_bytes, reserved_bytes - received_bytes AS remaining FROM fabric_uploads \
          WHERE id = $1 AND tenant_scope = $2 AND certificate = $3 AND scope = $4 FOR UPDATE",
     )
     .bind(id)
@@ -209,5 +219,14 @@ async fn lock_upload(
     .await?
     .ok_or(UploadError::Denied)?;
     check_permit(permit)?;
-    Ok(row.try_get("remaining")?)
+    Ok(row)
+}
+
+async fn is_finalized(tx: &mut Transaction<'_, Postgres>, id: &str) -> Result<bool> {
+    Ok(sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM fabric_finalized_artifacts WHERE upload_id = $1)",
+    )
+    .bind(id)
+    .fetch_one(&mut **tx)
+    .await?)
 }
