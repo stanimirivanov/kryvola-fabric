@@ -162,7 +162,7 @@ async fn bounded_uploads() {
         authorization::{Authorizer, Scope, sha256_hex},
         upload::{UploadError, UploadStore},
     };
-    use object_store::{ObjectStore, aws::AmazonS3Builder, path::Path};
+    use object_store::{ObjectStore, ObjectStoreExt, aws::AmazonS3Builder, path::Path};
     use std::{
         path::PathBuf,
         sync::Arc,
@@ -177,10 +177,16 @@ async fn bounded_uploads() {
     let folder = PathBuf::from(std::env::var_os("FABRIC_FIXTURE_PG_SOCKET").unwrap());
     let path = folder.parent().unwrap().join("upload-test-policy.json");
     let auth = Authorizer::new(path.clone()).unwrap();
+    let corpus: Value = serde_json::from_str(include_str!(
+        "../../../contracts/spec/fixtures/canonical-modular-v2.json"
+    ))
+    .unwrap();
+    let manifest = &corpus["objects"][0];
+    let canonical = hex::decode(manifest["canonical_hex"].as_str().unwrap()).unwrap();
     let scope_json = json!({
-        "schema_version":"1","attempt":{"schema_version":"1","tenant_scope":"uploads",
+        "schema_version":"1","attempt":{"schema_version":"1","tenant_scope":"tenant-fixture",
         "operation_id":"op","workflow_epoch":"1","attempt_epoch":"1","fence":"1"},
-        "manifest_digest":"a".repeat(64),"purpose":"COMPUTE_WRITE"
+        "manifest_digest":manifest["digest"],"purpose":"COMPUTE_WRITE"
     });
     let scope = Scope::decode(scope_json.to_string().as_bytes()).unwrap();
     let now = SystemTime::now()
@@ -274,5 +280,73 @@ async fn bounded_uploads() {
             .await,
         Err(UploadError::Denied)
     );
-    store.reserve(permit(12, "worker"), 8).await.unwrap();
+    let reusable = store.reserve(permit(12, "worker"), 8).await.unwrap();
+    store.abort(permit(13, "worker"), &reusable).await.unwrap();
+
+    let id = store.reserve(permit(14, "worker"), 4).await.unwrap();
+    assert_eq!(
+        store.finalize(permit(15, "worker"), &id, &canonical).await,
+        Err(UploadError::Integrity)
+    );
+    let mut substituted = canonical.clone();
+    substituted.push(b' ');
+    assert!(
+        store
+            .finalize(permit(16, "worker"), &id, &substituted)
+            .await
+            .is_err()
+    );
+    store
+        .put_part(permit(17, "worker"), &id, 0, 4, &b"bad!"[..])
+        .await
+        .unwrap();
+    assert_eq!(
+        store.finalize(permit(18, "worker"), &id, &canonical).await,
+        Err(UploadError::Integrity)
+    );
+    assert!(
+        objects
+            .list(Some(&Path::from(format!("immutable/{id}"))))
+            .try_next()
+            .await
+            .unwrap()
+            .is_none()
+    );
+    objects
+        .put(
+            &Path::from(format!("staging/{id}/0")),
+            vec![0, 1, 2, 255].into(),
+        )
+        .await
+        .unwrap();
+
+    // Simulate a crash after copying a verified part but before committing metadata.
+    objects
+        .put(
+            &Path::from(format!("immutable/{id}/0")),
+            vec![0, 1, 2, 255].into(),
+        )
+        .await
+        .unwrap();
+    let (a, b) = tokio::join!(
+        store.finalize(permit(19, "worker"), &id, &canonical),
+        store.finalize(permit(20, "worker"), &id, &canonical),
+    );
+    let artifact = a.unwrap();
+    assert_eq!(b.unwrap(), artifact);
+    assert_eq!(
+        artifact.manifest_digest,
+        manifest["digest"].as_str().unwrap()
+    );
+    assert_eq!(artifact.byte_length, 4);
+    assert_eq!(
+        store.abort(permit(21, "worker"), &id).await,
+        Err(UploadError::Conflict)
+    );
+    assert_eq!(
+        store
+            .put_part(permit(22, "worker"), &id, 0, 4, &b"evil"[..])
+            .await,
+        Err(UploadError::Conflict)
+    );
 }
