@@ -1,4 +1,5 @@
 //! Foundation control boundaries. This crate implements no encryption or inference.
+pub mod authorization;
 #[path = "../../../contracts/spec/rust/artifact_ref.rs"]
 pub mod contract;
 #[path = "../../../contracts/spec/rust/limits.rs"]

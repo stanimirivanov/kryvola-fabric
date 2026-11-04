@@ -77,3 +77,28 @@ It tears down its project and volumes on success or failure. Full verification
 runs this gate alongside the Rust socket tests. The PostgreSQL and S3 probes
 exercise the services directly. Runtime clients and authenticated endpoints
 belong to later slices.
+
+## M1-PR5 workload authorization
+
+Run the loopback shell with `--mtls SERVER_CHAIN_PEM SERVER_KEY_PEM CLIENT_CA_PEM POLICY_JSON`
+to enable the artifact authorization check. Rustls verifies the client chain and
+proof of key possession. The process prints its address and a public boot ID.
+An operator with exclusive write access to the policy directory provisions grants
+out of band and replaces the policy file atomically.
+
+The local policy object contains `boot_id` and up to 256 `grants`. Each grant
+contains `certificate_sha256` (verified leaf DER), `token_sha256` (ASCII bearer
+token), `scope` (the Spec v1 artifact authorization request), and an integer
+`expires_unix_ms`. Generate a fresh random 32-byte token as lowercase hex and
+send it only in the HTTPS Authorization header. The grant matches one exact
+certificate, tenant, operation, workflow/attempt epochs, fence, manifest, and
+purpose. The check accepts only grants expiring within the next 60 seconds.
+Redemption consumes the token for that process. A fresh boot ID invalidates old
+policy files after restart. After 4,096 redemptions the process denies new ones.
+
+Policy is read for every check, so replacing or removing a grant takes effect on
+the next policy read. To rotate a client certificate, provision a fresh grant for
+the new leaf. A trust-root change requires a restart. The runtime logs fixed
+denial codes and has no policy cache. The authorization response contains only
+the expiry, and no runtime route serves artifact bytes. Later registry handlers
+must independently check current attempt and fence state before mutation.
