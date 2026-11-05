@@ -2,7 +2,7 @@ name: foundation
 on:
   pull_request:
   push:
-    branches: [main, 'feature/issue-*', 'fix/issue-*']
+    branches: [main]
 permissions:
   contents: read
 concurrency:
