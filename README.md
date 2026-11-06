@@ -12,13 +12,14 @@ uv run --locked --extra conformance python tools/verify.py fast
 # Linux x86_64 with local Docker; downloads a checksum-pinned test CLI:
 uv run --locked --extra conformance python tools/install_temporal.py
 uv run --locked --extra conformance python tools/install_release.py
+uv run --locked python tools/install_spire.py
 uv run --locked --extra conformance python tools/verify.py full
 uv run --locked python -m kryvola_fabric
 ```
 
 `fast` runs formatting/lint/type/provenance/dependency checks and Rust fmt/clippy. `full` adds isolated positive/negative controls, Rust tests and a Python wheel build. Missing tools or files fail the command. Apply Python formatting with `uv run --locked ruff format .` and lint fixes with `uv run --locked ruff check --fix .`; use `cargo fmt --all` for Rust; rerun affected checks after changes.
 
-No service credentials or local databases are required for this scope. `spec.lock.json` pins immutable generated spec artifacts; a sibling checkout is unnecessary. Generated structural types are not native decoders or authorization. [Architecture and enforcement](docs/architecture.md), [progress](docs/progress.md), and the source references below describe limits.
+The foundation inspection command needs no service credentials or local database. Full verification owns local fixtures; the optional M1 runtime requires SPIFFE and, for registry routes, PostgreSQL. See [runtime setup and coordinator policy](docs/progress.md#m1-pr6-postgresql-operation-registry). `spec.lock.json` pins immutable generated spec artifacts; a sibling checkout is unnecessary. Generated structural types are not native decoders or authorization. [Architecture and enforcement](docs/architecture.md), [progress](docs/progress.md), and the source references below describe limits.
 
 M0-PR14 adds [strict Rust/Python control validation](docs/control-validation.md) over pinned Protobuf descriptors and schemas, with complete payload/Temporal-call budgets. The helpers grant no execution or disclosure rights. Before committing, apply formatting/lint fixes and check the full changed-file diff, including documentation; heavy checks may run on CI.
 

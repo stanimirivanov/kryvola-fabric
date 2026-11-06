@@ -279,7 +279,9 @@ def check_registry(folder: Path, test: str, **settings: str) -> None:
         raise RuntimeError(f"Registry probe {test} did not run")
 
 
-def _runtime_command(command: list[str], timeout: float) -> subprocess.CompletedProcess[str]:
+def _runtime_command(
+    command: list[str], timeout: float, *, env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
     """Own the cargo/test/runtime process group, including timeout and signal cleanup."""
     process = subprocess.Popen(
         command,
@@ -289,6 +291,7 @@ def _runtime_command(command: list[str], timeout: float) -> subprocess.Completed
         text=True,
         errors="replace",
         start_new_session=True,
+        env=env,
     )
     try:
         stdout, stderr = process.communicate(timeout=timeout)
@@ -363,6 +366,43 @@ def check_workload_auth() -> None:
         )
 
 
+def check_registry_http(folder: Path, invoke: Invoke) -> None:
+    container = require(invoke("ps", "-q", "postgres"), "PostgreSQL container identity").strip()
+    env = {
+        **os.environ,
+        "FABRIC_FIXTURE_PG_SOCKET": str(folder / "postgres-socket"),
+        "FABRIC_FIXTURE_PG_CONTAINER": container,
+    }
+    result = _runtime_command(
+        [
+            sys.executable,
+            "-m",
+            "unittest",
+            "discover",
+            "-s",
+            "tests",
+            "-p",
+            "live_registry.py",
+            "-v",
+        ],
+        90,
+        env=env,
+    )
+    test = "test_authenticated_durable_operation_and_attempt_routes"
+    if (
+        result.returncode
+        or f"{test} (live_registry.RegistryHttpTests.{test}) ... ok" not in result.stderr
+        or "Ran 1 test" not in result.stderr
+        or not result.stderr.rstrip().endswith("OK")
+    ):
+        frames = [
+            line
+            for line in result.stderr.splitlines()
+            if line.startswith(("FAIL: ", "ERROR: ", '  File "'))
+        ]
+        raise RuntimeError("Registry HTTP probe failed or did not run\n" + "\n".join(frames))
+
+
 def run(folder: Path) -> None:
     host = os.environ.get("DOCKER_HOST", "")
     if host and not host.startswith("unix://"):
@@ -392,6 +432,7 @@ def run(folder: Path) -> None:
             "Fixture restart readiness",
         )
         check_registry(folder, "registry_survives_postgres_restart")
+        check_registry_http(folder, invoke)
         check_s3(invoke)
         endpoint = require(invoke("port", "s3", "8333"), "S3 loopback endpoint").strip()
         host, _, port = endpoint.rpartition(":")

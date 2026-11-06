@@ -53,6 +53,23 @@ async fn durable_registry() {
         RegistryError::IdempotencyConflict,
     );
 
+    let mut racing_operation = intent.record().operation.clone();
+    racing_operation["operation_id"] = json!("conflicting-race");
+    racing_operation["idempotency_key"] = json!("conflicting-race");
+    let left =
+        OperationIntent::new(&validator, racing_operation.clone(), vec!["c".repeat(64)]).unwrap();
+    let right = OperationIntent::new(&validator, racing_operation, vec!["d".repeat(64)]).unwrap();
+    let (a, b) = tokio::join!(
+        registry.create_operation(&left),
+        registry.create_operation(&right)
+    );
+    assert_eq!(usize::from(a.is_ok()) + usize::from(b.is_ok()), 1);
+    assert!(matches!(
+        (&a, &b),
+        (Err(RegistryError::IdempotencyConflict), Ok(_))
+            | (Ok(_), Err(RegistryError::IdempotencyConflict))
+    ));
+
     let key = intent.key();
     let workflow = intent.workflow_epoch();
     let foreign_key = OperationKey {
@@ -120,6 +137,17 @@ async fn durable_registry() {
         Err(RegistryError::AttemptExpired),
     );
     let second = registry.ensure_attempt(key, workflow, 2).await.unwrap();
+    let expected = std::path::PathBuf::from(std::env::var_os("FABRIC_FIXTURE_PG_SOCKET").unwrap())
+        .parent()
+        .unwrap()
+        .join("current-attempt.json");
+    std::fs::write(
+        expected,
+        json!({"epoch": second.attempt_epoch, "fence":second.fence,
+        "expires":second.expires_unix_ms})
+        .to_string(),
+    )
+    .unwrap();
     assert!(second.fence > first.fence);
     assert_eq!(
         registry.renew_attempt(key, workflow, 2, first.fence).await,
@@ -144,7 +172,7 @@ async fn registry_survives_postgres_restart() {
         operation_id: op["operation_id"].as_str().unwrap(),
     };
     let workflow = op["workflow_epoch"].as_str().unwrap().parse().unwrap();
-    let registry = Registry::new(pool);
+    let registry = Registry::new(pool.clone());
     registry.migrate().await.unwrap();
     let saved = registry.lookup_operation(key).await.unwrap().unwrap();
     assert_eq!(saved.input_manifest_digests, ["a".repeat(64)]);
@@ -152,6 +180,27 @@ async fn registry_survives_postgres_restart() {
         registry.ensure_attempt(key, workflow, 1).await,
         Err(RegistryError::AttemptExpired),
     );
+    let expected = std::path::PathBuf::from(std::env::var_os("FABRIC_FIXTURE_PG_SOCKET").unwrap())
+        .parent()
+        .unwrap()
+        .join("current-attempt.json");
+    let expected: Value = serde_json::from_slice(&std::fs::read(expected).unwrap()).unwrap();
+    let current = registry.ensure_attempt(key, workflow, 2).await.unwrap();
+    assert_eq!(current.attempt_epoch, expected["epoch"].as_u64().unwrap());
+    assert_eq!(current.fence, expected["fence"].as_u64().unwrap());
+    assert_eq!(
+        current.expires_unix_ms,
+        expected["expires"].as_u64().unwrap()
+    );
+    sqlx::query("UPDATE fabric_attempts SET lease_expires_unix_ms=0 WHERE tenant_scope=$1 AND operation_id=$2")
+        .bind(key.tenant_scope).bind(key.operation_id).execute(&pool).await.unwrap();
+    assert_eq!(
+        registry.ensure_attempt(key, workflow, 2).await,
+        Err(RegistryError::AttemptExpired)
+    );
+    let third = registry.ensure_attempt(key, workflow, 3).await.unwrap();
+    assert_eq!(third.attempt_epoch, current.attempt_epoch + 1);
+    assert!(third.fence > current.fence);
 }
 
 #[tokio::test]
