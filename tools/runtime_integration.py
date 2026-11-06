@@ -310,6 +310,36 @@ def check_runtime() -> None:
         raise RuntimeError("Bounded runtime probe did not run")
 
 
+def check_workload_auth() -> None:
+    require(
+        _runtime_command(
+            ["cargo", "build", "--locked", "-p", "kryvola-fabric-core", "--bin", "fabric-runtime"],
+            600,
+        ),
+        "SPIFFE runtime build",
+    )
+    result = _runtime_command(
+        [
+            sys.executable,
+            "-m",
+            "unittest",
+            "discover",
+            "-s",
+            "tests",
+            "-p",
+            "live_runtime_auth.py",
+            "-v",
+        ],
+        120,
+    )
+    if (
+        result.returncode
+        or "Ran 2 tests" not in result.stderr
+        or not result.stderr.rstrip().endswith("OK")
+    ):
+        raise RuntimeError("SPIRE workload authentication probes failed or did not run")
+
+
 def run(folder: Path) -> None:
     host = os.environ.get("DOCKER_HOST", "")
     if host and not host.startswith("unix://"):
@@ -330,6 +360,7 @@ def run(folder: Path) -> None:
     try:
         require(invoke("up", "-d", "--wait", "--wait-timeout=90", timeout=600), "Fixture startup")
         check_runtime()
+        check_workload_auth()
         check_postgres(invoke)
         check_registry(folder, "durable_registry")
         require(invoke("restart", "postgres", timeout=90), "PostgreSQL restart")
@@ -397,7 +428,9 @@ def main() -> int:
     except (OSError, subprocess.TimeoutExpired, KeyboardInterrupt) as error:
         print(f"Runtime integration: {type(error).__name__}", file=sys.stderr)
         return 1
-    print("Runtime integration passed: bounded runtime, PostgreSQL, SeaweedFS, and Redpanda.")
+    print(
+        "Runtime integration passed: bounded runtime, SPIRE, PostgreSQL, SeaweedFS, and Redpanda."
+    )
     return 0
 
 

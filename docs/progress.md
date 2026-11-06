@@ -80,28 +80,49 @@ belong to later slices.
 
 ## M1-PR5 workload authorization
 
-Run the loopback shell with `--mtls SERVER_CHAIN_PEM SERVER_KEY_PEM CLIENT_CA_PEM POLICY_JSON`
-to enable the artifact authorization check. Rustls verifies the client chain and
-proof of key possession. The process prints its address and a public boot ID.
-An operator with exclusive write access to the policy directory provisions grants
-out of band and replaces the policy file atomically.
+Run `fabric-runtime --spiffe unix:///path/to/agent.sock spiffe://DOMAIN/runtime POLICY_JSON`
+to enable artifact authorization. The SPIFFE Workload API supplies the selected
+server X.509-SVID, private key and trust bundles; updates rotate TLS material
+without restart. The configured server identity must be available from that
+provider. TLS verifies key possession, chain, validity and SPIFFE identity in the
+local trust domain. Only the verified SPIFFE ID enters Kryvola policy evaluation;
+headers and common names cannot supply identity. Plaintext mode remains a bounded,
+health-only shell. No production SPIRE deployment is included.
 
-The local policy object contains `boot_id` and up to 256 `grants`. Each grant
-contains `certificate_sha256` (verified leaf DER), `token_sha256` (ASCII bearer
-token), `scope` (the Spec v1 artifact authorization request), and an integer
-`expires_unix_ms`. Generate a fresh random 32-byte token as lowercase hex and
-send it only in the HTTPS Authorization header. The grant matches one exact
-certificate, tenant, operation, workflow/attempt epochs, fence, manifest, and
-purpose. The check accepts only grants expiring within the next 60 seconds.
-Redemption consumes the token for that process. A fresh boot ID invalidates old
-policy files after restart. After 4,096 redemptions the process denies new ones.
+**Compatibility change (M1-PR5-R1):** `--mtls` and fingerprint grants are removed.
+Operators must provision a Workload API socket and replace `certificate_sha256`
+with the exact `spiffe_id` string. Legacy fields fail closed. Grants now survive
+SVID rotation for the same workload. Internal upload permits retain their existing
+`certificate` storage field but bind it to the verified SPIFFE ID; no SQL schema
+migration or externally served upload route is introduced.
 
-Policy is read for every check, so replacing or removing a grant takes effect on
-the next policy read. To rotate a client certificate, provision a fresh grant for
-the new leaf. A trust-root change requires a restart. The runtime logs fixed
-denial codes and has no policy cache. The authorization response contains only
-the expiry, and no runtime route serves artifact bytes. Later registry handlers
-must independently check current attempt and fence state before mutation.
+The process prints its address and public boot ID. An operator with exclusive
+write access to the policy directory atomically replaces a JSON object containing
+`boot_id` and up to 256 `grants`. Each grant contains `spiffe_id`, `token_sha256`
+(SHA-256 of the ASCII bearer token), `scope` (the Spec v1 authorization request),
+and integer `expires_unix_ms`. Generate a fresh random 32-byte lowercase-hex token
+and send it only in the HTTPS Authorization header. The grant matches one exact
+workload, tenant, operation, workflow/attempt epochs, fence, manifest and purpose.
+Only expiries within the next 60 seconds are accepted. Redemption consumes the
+token for that process; a new boot ID invalidates old grants. The existing 4,096
+redemption cap remains until M1-PR5-R2.
+
+Policy is reread on every check, so replacement/removal applies on the next read.
+Provider terminal closure fails new TLS material acquisitions closed; transport
+reconnects retain the last accepted material, whose certificate expiry is still
+checked during TLS. This does **not** establish the planned maximum identity
+revocation/cache TTL: bounded freshness, exhaustive denial auditing and redemption
+capacity recovery remain M1-PR5-R2 work. Existing connections last at most eight
+seconds and disable HTTP keep-alive. Authorization returns only expiry, serves no
+artifact bytes, and cannot substitute for current-attempt SQL fencing.
+
+Install the checksum-pinned local fixture with `uv run --locked python tools/install_spire.py`.
+F-live (`uv run --locked --extra conformance python tools/runtime_integration.py ci`)
+owns the real SPIRE server/agent authentication suite, in addition to runtime
+bounds and storage/broker fixtures. Missing SPIRE binaries fail the gate. The
+fixture uses local UID selectors and insecure bootstrap inside a private temporary
+directory; it proves provider integration, not production workload isolation.
+See [the dependency decision](decisions/0001-spiffe-workload-source.md).
 
 ## M1-PR6 PostgreSQL operation registry
 
@@ -128,7 +149,7 @@ Selection, cancellation and release are separate slices.
 ## M1-PR7 bounded artifact staging
 
 The internal upload store redeems compute-write grants and binds a reservation to
-the exact workload certificate and request scope. PostgreSQL serializes quota
+the exact verified workload SPIFFE ID and request scope. PostgreSQL serializes quota
 admission per tenant and part writes per upload. A part is capped at 4 MiB, must
 match its declared length, and uses conditional S3 creation. The caller supplies
 a bounded PostgreSQL pool, a private S3 store, and the tenant quota. Each part

@@ -12,19 +12,14 @@ use axum::{
 use hyper::{server::conn::http1, service::service_fn};
 use hyper_util::rt::{TokioIo, TokioTimer};
 use kryvola_fabric_core::{
-    authorization::{Authorizer, Scope, sha256_hex},
+    authorization::{Authorizer, Scope},
     limits::CONTROL_BYTES,
     runtime_contract::{RuntimeCode, RuntimeValidator},
 };
+use spiffe::{SpiffeId, X509Source, X509Svid, x509_source::SvidPicker};
+use spiffe_rustls::{LocalOnly, TerminalSourcePolicy, authorizer, mtls_server};
+use spiffe_rustls_tokio::TlsAcceptor;
 use tokio::{net::TcpListener, sync::Semaphore, time::timeout};
-use tokio_rustls::{
-    TlsAcceptor,
-    rustls::{
-        RootCertStore, ServerConfig,
-        pki_types::{CertificateDer, PrivateKeyDer, pem::PemObject},
-        server::{NoServerSessionStorage, WebPkiClientVerifier},
-    },
-};
 
 const BODY_TIMEOUT: Duration = Duration::from_secs(2);
 
@@ -55,7 +50,7 @@ async fn boundary(State(runtime): State<Arc<RuntimeValidator>>, request: Request
 
 async fn handle(
     request: Request,
-    peer: Option<(&str, &Authorizer)>,
+    peer: Option<(&SpiffeId, &Authorizer)>,
     runtime: &RuntimeValidator,
 ) -> Response {
     let authorize =
@@ -78,7 +73,7 @@ async fn handle(
         Ok(Err(_)) => reject_body(),
         Ok(Ok(bytes)) if health && bytes.is_empty() => reply(StatusCode::OK, r#"{"status":"ok"}"#),
         Ok(Ok(bytes)) if authorize && peer.is_some() => {
-            let Some((certificate, authorizer)) = peer else {
+            let Some((workload, authorizer)) = peer else {
                 unreachable!()
             };
             let mut values = headers.headers.get_all(header::AUTHORIZATION).iter();
@@ -97,7 +92,7 @@ async fn handle(
                 eprintln!("runtime_auth_denied invalid_scope");
                 return reply(StatusCode::BAD_REQUEST, RuntimeCode::InvalidRequest.body());
             };
-            match authorizer.redeem(certificate, token, &scope) {
+            match authorizer.redeem(workload, token, &scope) {
                 Some(expiry) => reply(
                     StatusCode::OK,
                     format!(r#"{{"schema_version":"1","expires_unix_ms":"{expiry}"}}"#),
@@ -109,23 +104,36 @@ async fn handle(
     }
 }
 
-fn tls_config(cert: &str, key: &str, ca: &str) -> Result<ServerConfig, Box<dyn Error>> {
-    let mut roots = RootCertStore::empty();
-    for root in CertificateDer::pem_file_iter(ca)? {
-        roots.add(root?)?;
+// Never fall back to the first identity when a provider supplies several SVIDs.
+#[derive(Debug)]
+struct IdentityPicker(SpiffeId);
+
+impl SvidPicker for IdentityPicker {
+    fn pick_svid(&self, svids: &[Arc<X509Svid>]) -> Option<usize> {
+        svids.iter().position(|svid| svid.spiffe_id() == &self.0)
     }
-    let chain = CertificateDer::pem_file_iter(cert)?.collect::<Result<Vec<_>, _>>()?;
-    let key = PrivateKeyDer::from_pem_file(key)?;
-    let provider = Arc::new(tokio_rustls::rustls::crypto::ring::default_provider());
-    let verifier =
-        WebPkiClientVerifier::builder_with_provider(roots.into(), provider.clone()).build()?;
-    let mut config = ServerConfig::builder_with_provider(provider)
-        .with_safe_default_protocol_versions()?
-        .with_client_cert_verifier(verifier)
-        .with_single_cert(chain, key)?;
-    config.session_storage = Arc::new(NoServerSessionStorage {});
-    config.send_tls13_tickets = 0;
-    Ok(config)
+}
+
+async fn workload_tls(endpoint: &str, identity: &str) -> Result<TlsAcceptor, Box<dyn Error>> {
+    if !endpoint.starts_with("unix://") {
+        return Err("Workload API requires a Unix socket endpoint".into());
+    }
+    let identity: SpiffeId = identity.parse()?;
+    let domain = identity.trust_domain().clone();
+    let source = timeout(
+        Duration::from_secs(10),
+        X509Source::builder()
+            .endpoint(endpoint)
+            .picker(IdentityPicker(identity))
+            .build(),
+    )
+    .await??;
+    let config = mtls_server(source)
+        .authorize(authorizer::trust_domains([domain.as_str()])?)
+        .trust_domain_policy(LocalOnly(domain))
+        .terminal_source_policy(TerminalSourcePolicy::FailClosed)
+        .build()?;
+    Ok(TlsAcceptor::new(Arc::new(config)))
 }
 
 async fn serve_mtls(
@@ -145,26 +153,21 @@ async fn serve_mtls(
         let runtime = runtime.clone();
         tokio::spawn(async move {
             let _slot = slot;
-            let Ok(Ok(stream)) = timeout(Duration::from_secs(3), acceptor.accept(socket)).await
+            let Ok(Ok((stream, identity))) =
+                timeout(Duration::from_secs(3), acceptor.accept(socket)).await
             else {
                 eprintln!("runtime_auth_denied handshake");
                 return;
             };
-            let Some(cert) = stream
-                .get_ref()
-                .1
-                .peer_certificates()
-                .and_then(|chain| chain.first())
-            else {
-                eprintln!("runtime_auth_denied handshake");
+            let Some(peer) = identity.spiffe_id() else {
+                eprintln!("runtime_auth_denied identity");
                 return;
             };
-            let peer = sha256_hex(cert.as_ref());
             let service = service_fn(|request: hyper::Request<hyper::body::Incoming>| async {
                 Ok::<_, std::convert::Infallible>(
                     handle(
                         request.map(axum::body::Body::new),
-                        Some((&peer, &auth)),
+                        Some((peer, &auth)),
                         &runtime,
                     )
                     .await,
@@ -194,13 +197,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
             )
             .await?;
         }
-        [mode, cert, key, ca, policy] if mode == "--mtls" => {
-            let acceptor = TlsAcceptor::from(Arc::new(tls_config(cert, key, ca)?));
+        [mode, endpoint, identity, policy] if mode == "--spiffe" => {
+            let acceptor = workload_tls(endpoint, identity).await?;
             let auth = Arc::new(Authorizer::new(policy.into())?);
             println!("{} {}", listener.local_addr()?, auth.boot_id());
             serve_mtls(listener, acceptor, auth, runtime).await?;
         }
-        _ => return Err("usage: fabric-runtime [--mtls CERT KEY CA POLICY]".into()),
+        _ => {
+            return Err(
+                "usage: fabric-runtime [--spiffe WORKLOAD_API_ENDPOINT SERVER_SPIFFE_ID POLICY]"
+                    .into(),
+            );
+        }
     }
     Ok(())
 }
