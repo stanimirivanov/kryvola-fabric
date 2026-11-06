@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "enum": [
+        "1"
+      ]
+    },
+    "code": {
+      "type": "string",
+      "enum": [
+        "NOT_FOUND"
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "code"
+  ],
+  "additionalProperties": false
+}

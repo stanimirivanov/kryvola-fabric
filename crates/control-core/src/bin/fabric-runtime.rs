@@ -5,7 +5,7 @@ use std::{error::Error, sync::Arc, time::Duration};
 use axum::{
     Router,
     body::to_bytes,
-    extract::Request,
+    extract::{Request, State},
     http::{Method, StatusCode, header},
     response::{IntoResponse, Response},
 };
@@ -14,6 +14,7 @@ use hyper_util::rt::{TokioIo, TokioTimer};
 use kryvola_fabric_core::{
     authorization::{Authorizer, Scope, sha256_hex},
     limits::CONTROL_BYTES,
+    runtime_contract::{RuntimeCode, RuntimeValidator},
 };
 use tokio::{net::TcpListener, sync::Semaphore, time::timeout};
 use tokio_rustls::{
@@ -39,23 +40,24 @@ fn reply(status: StatusCode, body: impl Into<String>) -> Response {
 fn reject_body() -> Response {
     reply(
         StatusCode::PAYLOAD_TOO_LARGE,
-        r#"{"error":"BODY_REJECTED"}"#,
+        RuntimeCode::PayloadTooLarge.body(),
     )
 }
 
 fn deny(reason: &'static str) -> Response {
     eprintln!("runtime_auth_denied {reason}");
-    reply(
-        StatusCode::FORBIDDEN,
-        r#"{"schema_version":"1","code":"FORBIDDEN"}"#,
-    )
+    reply(StatusCode::FORBIDDEN, RuntimeCode::Forbidden.body())
 }
 
-async fn boundary(request: Request) -> Response {
-    handle(request, None).await
+async fn boundary(State(runtime): State<Arc<RuntimeValidator>>, request: Request) -> Response {
+    handle(request, None, &runtime).await
 }
 
-async fn handle(request: Request, peer: Option<(&str, &Authorizer)>) -> Response {
+async fn handle(
+    request: Request,
+    peer: Option<(&str, &Authorizer)>,
+    runtime: &RuntimeValidator,
+) -> Response {
     let authorize =
         request.method() == Method::POST && request.uri() == "/v1/artifact-access/authorize";
     let (headers, body) = request.into_parts();
@@ -71,7 +73,7 @@ async fn handle(request: Request, peer: Option<(&str, &Authorizer)>) -> Response
     match timeout(BODY_TIMEOUT, to_bytes(body, CONTROL_BYTES)).await {
         Err(_) => reply(
             StatusCode::REQUEST_TIMEOUT,
-            r#"{"error":"REQUEST_TIMEOUT"}"#,
+            RuntimeCode::InvalidRequest.body(),
         ),
         Ok(Err(_)) => reject_body(),
         Ok(Ok(bytes)) if health && bytes.is_empty() => reply(StatusCode::OK, r#"{"status":"ok"}"#),
@@ -87,12 +89,13 @@ async fn handle(request: Request, peer: Option<(&str, &Authorizer)>) -> Response
             let Some(token) = token.filter(|_| values.next().is_none()) else {
                 return deny("credential");
             };
-            let Some(scope) = Scope::decode(&bytes) else {
+            let scope = runtime
+                .decode("AuthorizeArtifactRequest", &bytes)
+                .ok()
+                .and_then(|_| Scope::decode(&bytes));
+            let Some(scope) = scope else {
                 eprintln!("runtime_auth_denied invalid_scope");
-                return reply(
-                    StatusCode::BAD_REQUEST,
-                    r#"{"schema_version":"1","code":"INVALID_REQUEST"}"#,
-                );
+                return reply(StatusCode::BAD_REQUEST, RuntimeCode::InvalidRequest.body());
             };
             match authorizer.redeem(certificate, token, &scope) {
                 Some(expiry) => reply(
@@ -102,7 +105,7 @@ async fn handle(request: Request, peer: Option<(&str, &Authorizer)>) -> Response
                 None => deny("policy"),
             }
         }
-        Ok(Ok(_)) => reply(StatusCode::NOT_FOUND, r#"{"error":"NOT_FOUND"}"#),
+        Ok(Ok(_)) => reply(StatusCode::NOT_FOUND, RuntimeCode::NotFound.body()),
     }
 }
 
@@ -129,6 +132,7 @@ async fn serve_mtls(
     listener: TcpListener,
     acceptor: TlsAcceptor,
     auth: Arc<Authorizer>,
+    runtime: Arc<RuntimeValidator>,
 ) -> std::io::Result<()> {
     let capacity = Arc::new(Semaphore::new(64));
     loop {
@@ -138,6 +142,7 @@ async fn serve_mtls(
         };
         let acceptor = acceptor.clone();
         let auth = auth.clone();
+        let runtime = runtime.clone();
         tokio::spawn(async move {
             let _slot = slot;
             let Ok(Ok(stream)) = timeout(Duration::from_secs(3), acceptor.accept(socket)).await
@@ -157,7 +162,12 @@ async fn serve_mtls(
             let peer = sha256_hex(cert.as_ref());
             let service = service_fn(|request: hyper::Request<hyper::body::Incoming>| async {
                 Ok::<_, std::convert::Infallible>(
-                    handle(request.map(axum::body::Body::new), Some((&peer, &auth))).await,
+                    handle(
+                        request.map(axum::body::Body::new),
+                        Some((&peer, &auth)),
+                        &runtime,
+                    )
+                    .await,
                 )
             });
             let connection = http1::Builder::new()
@@ -172,18 +182,23 @@ async fn serve_mtls(
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn Error>> {
+    let runtime = Arc::new(RuntimeValidator::new()?);
     let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).await?;
     let args: Vec<_> = std::env::args().skip(1).collect();
     match args.as_slice() {
         [] => {
             println!("{}", listener.local_addr()?);
-            axum::serve(listener, Router::new().fallback(boundary)).await?;
+            axum::serve(
+                listener,
+                Router::new().fallback(boundary).with_state(runtime),
+            )
+            .await?;
         }
         [mode, cert, key, ca, policy] if mode == "--mtls" => {
             let acceptor = TlsAcceptor::from(Arc::new(tls_config(cert, key, ca)?));
             let auth = Arc::new(Authorizer::new(policy.into())?);
             println!("{} {}", listener.local_addr()?, auth.boot_id());
-            serve_mtls(listener, acceptor, auth).await?;
+            serve_mtls(listener, acceptor, auth, runtime).await?;
         }
         _ => return Err("usage: fabric-runtime [--mtls CERT KEY CA POLICY]".into()),
     }

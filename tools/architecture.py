@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import base64
 import hashlib
 import json
 import re
@@ -21,6 +22,12 @@ REQUIRED_ARTIFACTS = {
     "python/limits.py",
     "artifact-ref.schema.json",
     "limits.json",
+    "runtime/RuntimeError.schema.json",
+    "runtime/AuthorizeArtifactRequest.schema.json",
+    "canonical/v3/release-authorization.schema.json",
+    "canonical/v3/approval.schema.json",
+    "canonical/v3/receipt.schema.json",
+    "canonical/v3/signature.schema.json",
     "rust/limits.rs",
     "cpp/artifact_ref.hpp",
     "fixtures/artifact-ref.json",
@@ -37,6 +44,47 @@ RUNTIME_ASSETS = {"descriptor.bin": "native", "schemas.json": "native", "limits.
 def is_foreign(name: str, forbidden: set[str]) -> bool:
     normalized = re.sub(r"[-_.]+", "_", name).lower()
     return any(normalized == item or normalized.startswith(item + "_") for item in forbidden)
+
+
+def verify_source_proof(root: Path, lock: dict, vendor: Path, native: Path) -> None:
+    """Bind manifest blobs to the pinned Git commit; not publisher authentication."""
+    try:
+        proof = json.loads((root / "contracts/source-proof.json").read_bytes())
+        if set(proof) != {"commit", "tree", "generated", "bindings"}:
+            raise ValueError
+        raw = {k: base64.b64decode(v, validate=True) for k, v in proof.items()}
+
+        def oid(kind: str, data: bytes) -> str:
+            return hashlib.sha1(f"{kind} {len(data)}\0".encode() + data).hexdigest()
+
+        def entry(data: bytes, name: bytes, mode: bytes) -> str:
+            offset = 0
+            while offset < len(data):
+                space = data.index(b" ", offset)
+                end = data.index(b"\0", space)
+                following = end + 21
+                if following > len(data):
+                    raise ValueError
+                if data[space + 1 : end] == name:
+                    if data[offset:space] != mode:
+                        raise ValueError
+                    return data[end + 1 : following].hex()
+                offset = following
+            raise ValueError
+
+        tree = re.match(rb"tree ([0-9a-f]{40})\n", raw["commit"])
+        if oid("commit", raw["commit"]) != lock["revision"] or tree is None:
+            raise ValueError
+        if oid("tree", raw["tree"]) != tree[1].decode():
+            raise ValueError
+        for name, folder in [("generated", vendor), ("bindings", native)]:
+            if oid("tree", raw[name]) != entry(raw["tree"], name.encode(), b"40000"):
+                raise ValueError
+            expected = entry(raw[name], b"manifest.json", b"100644")
+            if oid("blob", (folder / "manifest.json").read_bytes()) != expected:
+                raise ValueError
+    except OSError, KeyError, TypeError, ValueError:
+        raise ValueError("contracts: source proof mismatch") from None
 
 
 def verify_contracts(root: Path) -> None:
@@ -107,6 +155,8 @@ def verify_contracts(root: Path) -> None:
         source = vendor if bundle == "spec" else native
         if (root / "src/kryvola_fabric/_spec" / name).read_bytes() != (source / name).read_bytes():
             raise ValueError("contracts: modified packaged runtime asset")
+
+    verify_source_proof(root, lock, vendor, native)
 
 
 def dependency_errors(root: Path, repo: str) -> list[str]:

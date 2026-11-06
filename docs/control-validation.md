@@ -1,6 +1,6 @@
 # Bounded control descriptors (M0-PR14)
 
-This repository adopts spec `0.1.0-preview.10` at immutable commit
+The original M0-PR14 adoption used spec `0.1.0-preview.10` at immutable commit
 `1a5b57a590487ba116913050af8041f5e5f1fb52` (merged M0-PR13). `spec.lock.json`
 pins both complete generated and native artifact manifests. The architecture gate
 verifies every file, rejects unlisted files, correlates the native manifest's
@@ -59,3 +59,26 @@ vectors cover 20 cases, including 64 KiB control payloads; a derived valid 32 Ki
 Temporal fixture pads only bounded reference IDs from the pinned fixtures. Negative
 controls cover malformed versions/fields/bytes, unsafe inline fields, context
 correlations, aggregate framing overhead, sanitized errors and tampered/mixed assets.
+
+
+## M1 runtime JSON adoption (issue #31)
+
+The current pin is Spec commit `b95caa5317facb93f2a7cfe5df4a93c334131c9c`,
+superseding the historical pin above. Both complete artifact bundles were copied
+unchanged from that GitHub commit archive after checking every artifact and all
+149 recorded source hashes. `contracts/source-proof.json` retains the upstream
+commit/tree objects needed to bind both manifest blobs to `spec.lock.json` offline.
+Git object IDs identify source; SHA-256 pins artifact bytes. This is the documented
+commit-pinned adoption path, not verification or publication of a new signed release.
+
+Rust `RuntimeValidator::new()` compiles the trusted runtime schemas once;
+`decode(name, bytes)` rejects oversized, invalid UTF-8/JSON, unknown or out-of-schema
+fields with fixed `ControlError` values and no diagnostic source chain. Returned
+metadata grants no authority. The existing mTLS authorization route uses this
+adapter before redeeming policy; business endpoints remain denied.
+
+BEHAVIOR-ADJACENT: private error bodies become Spec `RuntimeError` envelopes.
+HTTP status codes stay unchanged: 404/NOT_FOUND, 413/PAYLOAD_TOO_LARGE and
+408/INVALID_REQUEST for incomplete timed-out bodies. Authentication denial remains
+403/FORBIDDEN. No credentials or rejected input enter these bodies. Revert the
+pin, artifact bundle, proof and consumer together; there is no database migration.
