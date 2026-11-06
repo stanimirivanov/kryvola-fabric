@@ -47,16 +47,28 @@ fn loopback_shell_bounds_requests_and_denies_runtime_routes() {
     );
     assert!(denied.starts_with("HTTP/1.1 404 "));
     assert!(!denied.contains("secret"));
+    let assert_error = |response: &str, code: &str| {
+        let body = response.split_once("\r\n\r\n").unwrap().1;
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(body).unwrap(),
+            serde_json::json!({"schema_version": "1", "code": code})
+        );
+    };
+    assert_error(&denied, "NOT_FOUND");
     let oversized = request(
         b"POST /v1/operations HTTP/1.1\r\nHost: local\r\nConnection: close\r\nContent-Length: 65537\r\n\r\n",
     );
     assert!(oversized.starts_with("HTTP/1.1 413 "));
+    assert_error(&oversized, "PAYLOAD_TOO_LARGE");
     let mut chunked = b"POST /v1/operations HTTP/1.1\r\nHost: local\r\nConnection: close\r\nTransfer-Encoding: chunked\r\n\r\n10000\r\n".to_vec();
     chunked.extend(std::iter::repeat_n(b'x', 65536));
     chunked.extend_from_slice(b"\r\n1\r\ny\r\n0\r\n\r\n");
-    assert!(request(&chunked).starts_with("HTTP/1.1 413 "));
+    let chunked = request(&chunked);
+    assert!(chunked.starts_with("HTTP/1.1 413 "));
+    assert_error(&chunked, "PAYLOAD_TOO_LARGE");
     let stalled = request(
         b"POST /v1/operations HTTP/1.1\r\nHost: local\r\nConnection: close\r\nContent-Length: 1\r\n\r\n",
     );
     assert!(stalled.starts_with("HTTP/1.1 408 "));
+    assert_error(&stalled, "INVALID_REQUEST");
 }

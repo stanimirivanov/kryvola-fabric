@@ -227,3 +227,25 @@ uses 24-hour event retention and one-hour dead-letter retention. It exposes a
 temporary loopback listener. Production topic provisioning, identities, inbox
 draining and Temporal wakeup processing belong to later slices. PostgreSQL
 retains the outbox and inbox in this slice. Kafka delivery is at least once.
+
+
+## M1-PR4-R1 — Adopt M1 contracts and correct runtime errors (issue #31)
+
+Adopt the immutable merged Spec generated/native bundles with all source hashes
+verified from the selected archive and offline Git-object manifest membership
+checks. Add the bounded compiled runtime JSON adapter and replace private shell
+errors with versioned Spec envelopes; preserve default-deny routes and existing
+policy behavior. The new source-proof negative test and real HTTP error test failed
+before the fixes. Identity-provider and business endpoint work remains in its
+planned follow-ups; no publication occurred.
+
+Pre-commit verification: the fast gate, 25 Python tests (including TLS/policy), Rust
+workspace tests and the real HTTP error regression passed. Full qualification is
+run against the clean committed source because its release harness requires that
+state; retained PR verification reports the final live/qualification outcome.
+
+The first full run exposed a missing-certificate TLS-test race: peer rejection
+surfaced as BrokenPipeError during the request body write. That specific negative
+case now accepts the observed transport failure, while any HTTP response still
+fails its assertion and subsequent authenticated requests verify server liveness.
+The original traceback is retained in local verification logs.

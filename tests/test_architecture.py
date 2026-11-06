@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import subprocess
@@ -70,6 +71,27 @@ class ArchitectureTests(unittest.TestCase):
             ),
             encoding="utf-8",
         )
+
+        # Minimal Git object witnesses tie both manifest blobs to the selected revision.
+        def oid(kind, data):
+            return hashlib.sha1(f"{kind} {len(data)}\0".encode() + data).hexdigest()
+
+        trees = {}
+        for name, raw in [("generated", manifest), ("bindings", bindings)]:
+            trees[name] = b"100644 manifest.json\0" + bytes.fromhex(oid("blob", raw))
+        tree = b"".join(
+            b"40000 " + name.encode() + b"\0" + bytes.fromhex(oid("tree", trees[name]))
+            for name in sorted(trees)
+        )
+        commit = f"tree {oid('tree', tree)}\n\nfixture\n".encode()
+        proof = {"commit": commit, "tree": tree, **trees}
+        (root / "contracts/source-proof.json").write_text(
+            json.dumps({k: base64.b64encode(v).decode() for k, v in proof.items()})
+        )
+        path = root / "spec.lock.json"
+        lock = json.loads(path.read_text())
+        lock["revision"] = oid("commit", commit)
+        path.write_text(json.dumps(lock))
         (root / "pyproject.toml").write_text(
             '[project]\nname="fixture"\ndependencies=[]\n', encoding="utf-8"
         )
@@ -176,6 +198,35 @@ class ArchitectureTests(unittest.TestCase):
                     self.assertEqual(errors, [])
                 else:
                     self.assertIn("forbidden implementation/local dependency", errors[0])
+
+    def test_source_revision_and_manifest_membership_cannot_be_retargeted(self):
+        for change in ["revision", "manifest", "proof", "missing"]:
+            with self.subTest(change=change), TemporaryDirectory() as directory:
+                root = Path(directory)
+                self.fixture(root)
+                path = root / "spec.lock.json"
+                lock = json.loads(path.read_text())
+                if change == "revision":
+                    lock["revision"] = "b" * 40
+                elif change == "manifest":
+                    manifest = root / "contracts/spec/manifest.json"
+                    manifest.write_bytes(manifest.read_bytes() + b" ")
+                    lock["manifest_sha256"] = hashlib.sha256(manifest.read_bytes()).hexdigest()
+                    native = root / "contracts/native/manifest.json"
+                    bindings = json.loads(native.read_text())
+                    bindings["sources"]["generated/manifest.json"] = lock["manifest_sha256"]
+                    native.write_text(json.dumps(bindings))
+                    lock["native_manifest_sha256"] = hashlib.sha256(native.read_bytes()).hexdigest()
+                elif change == "missing":
+                    (root / "contracts/source-proof.json").unlink()
+                else:
+                    proof = root / "contracts/source-proof.json"
+                    data = json.loads(proof.read_text())
+                    data["generated"] = base64.b64encode(b"tampered tree").decode()
+                    proof.write_text(json.dumps(data))
+                path.write_text(json.dumps(lock))
+                with self.assertRaisesRegex(ValueError, "source proof"):
+                    verify_contracts(root)
 
 
 if __name__ == "__main__":

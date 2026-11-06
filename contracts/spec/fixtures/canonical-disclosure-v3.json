@@ -1,0 +1,51 @@
+{
+  "identity": {
+    "schema_version": "1",
+    "tenant_scope": "tenant",
+    "logical_job_id": "job",
+    "output_stage": "output",
+    "recipient": "owner",
+    "disclosure_index": "0"
+  },
+  "authorization": {
+    "schema_version": "3",
+    "tenant_scope": "tenant",
+    "logical_job_id": "job",
+    "output_stage": "output",
+    "recipient": "owner",
+    "disclosure_index": "0",
+    "object_type": "release-authorization",
+    "operation_id": "op",
+    "workflow_epoch": "1",
+    "session_epoch": "2",
+    "attempt_epoch": "3",
+    "policy_epoch": "4",
+    "fence": "5",
+    "execution_id": "run",
+    "plan_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "model_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "program_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "key_context_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "policy_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "evidence_policy_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "consent_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "output_manifest_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "approval_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "receipt_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "assurance": "CONFIDENTIALITY_ONLY",
+    "valid_from_unix_ms": "100",
+    "expires_unix_ms": "200"
+  },
+  "header": {
+    "schema_version": "3",
+    "algorithm": "Ed25519",
+    "payload_kind": "release-authorization",
+    "signer": "coordinator",
+    "key_id": "release",
+    "key_epoch": "1",
+    "payload_digest": "6986ee1b65a12764e9d17492acb36240e1d3219f6e283f113d7b14d34b2650ad"
+  },
+  "canonical_utf8": "{\"approval_digest\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"assurance\":\"CONFIDENTIALITY_ONLY\",\"attempt_epoch\":\"3\",\"consent_digest\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"disclosure_index\":\"0\",\"evidence_policy_digest\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"execution_id\":\"run\",\"expires_unix_ms\":\"200\",\"fence\":\"5\",\"key_context_digest\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"logical_job_id\":\"job\",\"model_digest\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"object_type\":\"release-authorization\",\"operation_id\":\"op\",\"output_manifest_digest\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"output_stage\":\"output\",\"plan_digest\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"policy_digest\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"policy_epoch\":\"4\",\"program_digest\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"receipt_digest\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"recipient\":\"owner\",\"schema_version\":\"3\",\"session_epoch\":\"2\",\"tenant_scope\":\"tenant\",\"valid_from_unix_ms\":\"100\",\"workflow_epoch\":\"1\"}",
+  "disclosure_id": "b06ac5ece67aebc98c90228e69c82a85f92ff61b9d14005b2a71c7f3adf3d67b",
+  "preimage_blake3": "7726b136425c2081440531cde9ad204614ccc1e2737e3720779152de78871fcc"
+}

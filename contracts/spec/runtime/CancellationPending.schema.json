@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "enum": [
+        "1"
+      ]
+    },
+    "outcome": {
+      "type": "string",
+      "enum": [
+        "CANCELLATION_PENDING"
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "outcome"
+  ],
+  "additionalProperties": false
+}
