@@ -8,6 +8,7 @@ pub mod registry;
 pub mod registry_http;
 pub mod runtime_contract;
 pub mod upload;
+pub mod upload_http;
 pub mod wire;
 pub mod workload;
 

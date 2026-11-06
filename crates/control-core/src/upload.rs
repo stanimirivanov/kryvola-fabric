@@ -27,6 +27,9 @@ type Result<T> = std::result::Result<T, UploadError>;
 #[derive(Debug, PartialEq, Eq)]
 pub enum UploadError {
     Denied,
+    NotFound,
+    AttemptExpired,
+    StaleFence,
     Size,
     Quota,
     Conflict,
@@ -44,6 +47,7 @@ pub struct UploadStore {
     pool: PgPool,
     objects: Arc<dyn ObjectStore>,
     tenant_quota_bytes: u64,
+    fenced: bool,
 }
 
 fn check_permit(permit: &UploadPermit) -> Result<()> {
@@ -60,16 +64,90 @@ impl UploadStore {
             pool,
             objects,
             tenant_quota_bytes,
+            fenced: false,
         }
     }
 
-    pub async fn reserve(&self, permit: UploadPermit, bytes: usize) -> Result<String> {
+    pub(crate) fn fenced(pool: PgPool, objects: Arc<dyn ObjectStore>, quota: u64) -> Self {
+        Self {
+            pool,
+            objects,
+            tenant_quota_bytes: quota,
+            fenced: true,
+        }
+    }
+    async fn begin(&self, permit: &mut UploadPermit) -> Result<Transaction<'static, Postgres>> {
+        check_permit(permit)?;
+        let mut tx = self.pool.begin().await?;
+        if self.fenced {
+            match crate::registry::Registry::upload_deadline(&mut tx, &permit.scope).await {
+                Ok(deadline) => permit.bound_deadline(deadline),
+                Err(error) => {
+                    tx.commit().await?; // Persist observed expiry retirement even on denial.
+                    use crate::registry::RegistryError;
+                    return Err(match error {
+                        RegistryError::NotFound => UploadError::NotFound,
+                        RegistryError::AttemptExpired => UploadError::AttemptExpired,
+                        RegistryError::Unavailable => UploadError::Unavailable,
+                        _ => UploadError::StaleFence,
+                    });
+                }
+            }
+        }
+        check_permit(permit)?;
+        Ok(tx)
+    }
+
+    pub async fn put_manifest(
+        &self,
+        mut permit: UploadPermit,
+        id: &str,
+        bytes: &[u8],
+    ) -> Result<()> {
+        let value = finalize::manifest(bytes)?;
+        if value["tenant_scope"] != permit.tenant
+            || permit.scope["manifest_digest"]
+                != finalize::digest(b"kryvola/manifest/v2\0", &[bytes])
+        {
+            return Err(UploadError::Denied);
+        }
+        let mut tx = self.begin(&mut permit).await?;
+        lock_upload(&mut tx, &permit, id, self.fenced).await?;
+        if is_finalized(&mut tx, id).await? {
+            return Err(UploadError::Conflict);
+        }
+        check_permit(&permit)?;
+        timeout(
+            IO_TIMEOUT,
+            self.objects.put_opts(
+                &Path::from(format!("staging/{id}/manifest")),
+                bytes.to_vec().into(),
+                PutMode::Create.into(),
+            ),
+        )
+        .await
+        .map_err(|_| UploadError::Unavailable)?
+        .map_err(|error| match error {
+            object_store::Error::AlreadyExists { .. }
+            | object_store::Error::Precondition { .. } => UploadError::Conflict,
+            _ => UploadError::Unavailable,
+        })?;
+        check_permit(&permit)?;
+        sqlx::query("UPDATE fabric_uploads SET touched_at=clock_timestamp() WHERE id=$1")
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
+    pub async fn reserve(&self, mut permit: UploadPermit, bytes: usize) -> Result<String> {
         check_permit(&permit)?;
         if !(1..=ARTIFACT_MAX_BYTES).contains(&bytes) {
             return Err(UploadError::Size);
         }
         let bytes = bytes as i64;
-        let mut tx = self.pool.begin().await?;
+        let mut tx = self.begin(&mut permit).await?;
         // Take the same tenant row lock for every admission, including the first.
         sqlx::query("INSERT INTO fabric_upload_tenants VALUES ($1) ON CONFLICT DO NOTHING")
             .bind(&permit.tenant)
@@ -103,7 +181,7 @@ impl UploadStore {
 
     pub async fn put_part(
         &self,
-        permit: UploadPermit,
+        mut permit: UploadPermit,
         id: &str,
         index: u16,
         declared: usize,
@@ -112,8 +190,8 @@ impl UploadStore {
         if index > 1023 || !(1..=CHUNK_MAX_BYTES).contains(&declared) {
             return Err(UploadError::Size);
         }
-        let mut tx = self.pool.begin().await?;
-        let upload = lock_upload(&mut tx, &permit, id).await?;
+        let mut tx = self.begin(&mut permit).await?;
+        let upload = lock_upload(&mut tx, &permit, id, self.fenced).await?;
         if is_finalized(&mut tx, id).await? {
             return Err(UploadError::Conflict);
         }
@@ -148,18 +226,20 @@ impl UploadStore {
             .bind(declared as i64)
             .execute(&mut *tx)
             .await?;
+        check_permit(&permit)?;
         staged.retain_for_commit();
         tx.commit().await?;
         Ok(())
     }
 
-    pub async fn abort(&self, permit: UploadPermit, id: &str) -> Result<()> {
-        let mut tx = self.pool.begin().await?;
-        lock_upload(&mut tx, &permit, id).await?;
+    pub async fn abort(&self, mut permit: UploadPermit, id: &str) -> Result<()> {
+        let mut tx = self.begin(&mut permit).await?;
+        lock_upload(&mut tx, &permit, id, self.fenced).await?;
         if is_finalized(&mut tx, id).await? {
             return Err(UploadError::Conflict);
         }
         retention::mark(&mut tx, id).await?;
+        check_permit(&permit)?;
         tx.commit().await?;
         self.sweep(id).await?;
         Ok(())
@@ -170,6 +250,7 @@ async fn lock_upload(
     tx: &mut Transaction<'_, Postgres>,
     permit: &UploadPermit,
     id: &str,
+    fenced: bool,
 ) -> Result<sqlx::postgres::PgRow> {
     check_permit(permit)?;
     if id.len() != 32
@@ -188,8 +269,23 @@ async fn lock_upload(
     .bind(&permit.certificate)
     .bind(Json(&permit.scope))
     .fetch_optional(&mut **tx)
-    .await?
-    .ok_or(UploadError::Denied)?;
+    .await?;
+    let row = match row {
+        Some(row) => row,
+        None if fenced => {
+            let exists: bool =
+                sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM fabric_uploads WHERE id=$1)")
+                    .bind(id)
+                    .fetch_one(&mut **tx)
+                    .await?;
+            return Err(if exists {
+                UploadError::Denied
+            } else {
+                UploadError::NotFound
+            });
+        }
+        None => return Err(UploadError::Denied),
+    };
     check_permit(permit)?;
     Ok(row)
 }

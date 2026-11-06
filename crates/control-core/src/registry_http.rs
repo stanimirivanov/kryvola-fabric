@@ -27,6 +27,9 @@ pub struct RegistryApi {
     control: ControlValidator,
 }
 impl RegistryApi {
+    pub fn pool(&self) -> sqlx::PgPool {
+        self.registry.pool()
+    }
     pub async fn connect(path: &str) -> Result<Self, &'static str> {
         async fn load(path: &str) -> Result<RegistryApi, Box<dyn std::error::Error>> {
             if !std::fs::metadata(path)?.is_file() {

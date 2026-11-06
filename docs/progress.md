@@ -236,8 +236,7 @@ reliably run async abort. Configure backend lifecycle rules for incomplete sessi
 ordinary object listing/reclamation alone cannot remove incomplete multipart data.
 Unit tests inject read/write/completion/abort failures and cancellation; F-live
 verifies new mappings, legacy finalization, quota/overwrite/cleanup invariants and
-no unfinished sessions. Public upload routes and extended failure campaigns remain
-M1-PR7-R2/R3 work.
+no unfinished sessions. Extended failure campaigns remain M1-PR7-R3 work.
 
 **Rollout/rollback:** quiesce writers and apply the additive nullable migration
 before updating the service. New code reads both layouts; rollback to old code
@@ -251,7 +250,32 @@ bounded PostgreSQL pool, a private S3 store and tenant quota.
 
 The live gate now exposes the fixture S3 service on an ephemeral IPv4 loopback
 port for the Rust client. PostgreSQL remains on the private Unix socket. No
-public upload route or readable artifact reference is introduced.
+readable artifact reference is introduced.
+
+M1-PR7-R2 adds opt-in SPIFFE-authenticated `POST /v1/uploads`, binary
+`PUT /v1/uploads/{id}/parts/{index}`, canonical manifest
+`PUT /v1/uploads/{id}/manifest`, and `POST /v1/uploads/{id}/abort`. Each
+request redeems a fresh compute-write token bound to the exact workload, tenant,
+attempt and manifest commitment. The registry operation lock protects current-fence
+validation through the upload mutation; cancellation/selection and quota admission
+serialize with it. PostgreSQL lease and operation deadlines, the live SVID expiry,
+and provider freshness bound the permit throughout streaming.
+
+Parts require a positive Content-Length, at most 4 MiB, and stream directly into
+the bounded multipart adapter; they bypass the 64-KiB control-body collector.
+Control and canonical manifest bodies remain capped at 64 KiB. An abort commits
+unreachability before cleanup. Staged manifests remain private and write-once;
+no GET, finalization or ArtifactRef endpoint is enabled by this slice.
+
+Start with `--spiffe ENDPOINT ID POLICY --registry DB_URL_FILE --uploads S3_CONFIG_FILE`.
+The operator-private regular JSON file is capped at 16 KiB and supplies `endpoint`,
+`bucket`, `region`, `access_key_id`, `secret_access_key`, `tenant_quota_bytes`,
+and optional `allow_http` (false by default; true only for local fixtures). Keep
+it readable only by the service account. Credentials/URLs never enter grants,
+SQL control records or diagnostic output. Omit `--uploads` to disable these routes;
+there is no additional migration. F-live requires real SPIRE/HTTPS, PostgreSQL and
+S3 evidence for quota races, scope denials, streaming, manifest staging and abort.
+See [ADR-005](decisions/0005-authorized-streaming-uploads.md).
 
 ## M1-PR8 immutable artifact finalization
 

@@ -6,7 +6,7 @@ use std::{
     io::Read,
     path::PathBuf,
     sync::Mutex,
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
 use ring::{digest, rand::SecureRandom};
@@ -129,11 +129,22 @@ pub struct UploadPermit {
     pub(crate) certificate: String,
     pub(crate) scope: serde_json::Value,
     expires: u64,
+    deadline: Option<Instant>,
 }
 
 impl UploadPermit {
+    pub(crate) fn bind_transport(&mut self, expiry: u64, deadline: Instant) {
+        self.expires = self.expires.min(expiry);
+        self.bound_deadline(deadline);
+    }
+    pub(crate) fn bound_deadline(&mut self, deadline: Instant) {
+        self.deadline = Some(self.deadline.map_or(deadline, |old| old.min(deadline)));
+    }
     pub(crate) fn live(&self) -> bool {
         now_unix_ms().is_some_and(|now| now < self.expires)
+            && self
+                .deadline
+                .is_none_or(|deadline| Instant::now() < deadline)
     }
 }
 
@@ -174,6 +185,29 @@ impl Authorizer {
         &self.boot_id
     }
 
+    pub fn upload_permit(&self, workload: &SpiffeId, token: &str) -> Option<UploadPermit> {
+        let scope = (|| {
+            if !lowercase_digest(token) {
+                return Err(Denial::Credential);
+            }
+            let hash = sha256_hex(token.as_bytes());
+            let mut matches = self
+                .read_policy()?
+                .grants
+                .into_iter()
+                .filter(|grant| grant.token_sha256 == hash);
+            let grant = matches.next().ok_or(Denial::Policy)?;
+            if matches.next().is_some() {
+                return Err(Denial::Policy);
+            }
+            Scope::decode(&serde_json::to_vec(&grant.scope).map_err(|_| Denial::Policy)?)
+                .ok_or(Denial::Policy)
+        })()
+        .map_err(Denial::audit)
+        .ok()?;
+        self.redeem_upload(workload, token, &scope)
+    }
+
     pub fn redeem_upload(
         &self,
         workload: &SpiffeId,
@@ -190,6 +224,7 @@ impl Authorizer {
             certificate: workload.to_string(),
             scope: serde_json::to_value(scope).ok()?,
             expires,
+            deadline: None,
         })
     }
 

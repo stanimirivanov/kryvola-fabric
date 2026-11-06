@@ -23,7 +23,7 @@ fn number(value: &Value) -> Result<u64> {
         .ok_or(UploadError::Integrity)
 }
 
-fn digest(domain: &[u8], parts: &[&[u8]]) -> String {
+pub(super) fn digest(domain: &[u8], parts: &[&[u8]]) -> String {
     let mut state = blake3::Hasher::new();
     state.update(domain);
     for part in parts {
@@ -32,7 +32,7 @@ fn digest(domain: &[u8], parts: &[&[u8]]) -> String {
     state.finalize().to_hex().to_string()
 }
 
-fn manifest(bytes: &[u8]) -> Result<Value> {
+pub(super) fn manifest(bytes: &[u8]) -> Result<Value> {
     if bytes.len() > CONTROL_BYTES || !bytes.is_ascii() {
         return Err(UploadError::Size);
     }
@@ -120,7 +120,7 @@ async fn read_exact_object(
 impl UploadStore {
     pub async fn finalize(
         &self,
-        permit: UploadPermit,
+        mut permit: UploadPermit,
         id: &str,
         canonical: &[u8],
     ) -> Result<FinalizedArtifact> {
@@ -133,8 +133,8 @@ impl UploadStore {
             return Err(UploadError::Denied);
         }
         let size = number(&manifest["serialized_bytes"])?;
-        let mut tx = self.pool.begin().await?;
-        let upload = lock_upload(&mut tx, &permit, id).await?;
+        let mut tx = self.begin(&mut permit).await?;
+        let upload = lock_upload(&mut tx, &permit, id, self.fenced).await?;
         if upload.try_get::<i64, _>("reserved_bytes")? as u64 != size
             || upload.try_get::<i64, _>("remaining")? != 0
         {
