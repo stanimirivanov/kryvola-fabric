@@ -337,7 +337,19 @@ def check_workload_auth() -> None:
         or "Ran 2 tests" not in result.stderr
         or not result.stderr.rstrip().endswith("OK")
     ):
-        raise RuntimeError("SPIRE workload authentication probes failed or did not run")
+        # Report test names/frames, never assertion values or credential-bearing output.
+        frames = [
+            line
+            for line in result.stderr.splitlines()
+            if line.startswith(("FAIL: ", "ERROR: ", '  File "'))
+        ]
+        for line in result.stderr.splitlines():
+            kind = line.partition(":")[0]
+            if kind.endswith(("Error", "Exception")) and kind.replace(".", "").isidentifier():
+                frames.append(kind)
+        raise RuntimeError(
+            "SPIRE workload authentication probes failed or did not run\n" + "\n".join(frames)
+        )
 
 
 def run(folder: Path) -> None:

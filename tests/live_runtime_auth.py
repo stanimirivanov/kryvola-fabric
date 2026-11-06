@@ -57,6 +57,8 @@ class RuntimeAuthorizationTests(unittest.TestCase):
             )
             self.assertNotEqual(missing.returncode, 0)
             self.assertEqual(missing.stdout, "")
+            # The negative startup probe can outlast these deliberately short SVIDs.
+            credentials()
             with subprocess.Popen(
                 [
                     str(binary),
@@ -152,7 +154,12 @@ class RuntimeAuthorizationTests(unittest.TestCase):
                     publish("worker", expires)
                     # TLS rejection can arrive during the body write, before the alert is read.
                     with self.assertRaises(
-                        (ssl.SSLError, http.client.RemoteDisconnected, BrokenPipeError)
+                        (
+                            ssl.SSLError,
+                            http.client.RemoteDisconnected,
+                            BrokenPipeError,
+                            ConnectionResetError,
+                        )
                     ):
                         post(None)
                     self.assertEqual(post("other")[0], 403)
@@ -207,7 +214,12 @@ class RuntimeAuthorizationTests(unittest.TestCase):
                             timeout=10,
                         )
                         with self.assertRaises(
-                            (ssl.SSLError, http.client.RemoteDisconnected, BrokenPipeError)
+                            (
+                                ssl.SSLError,
+                                http.client.RemoteDisconnected,
+                                BrokenPipeError,
+                                ConnectionResetError,
+                            )
                         ):
                             post("forged")
                     with spire(folder / "foreign", "foreign.test") as (_, foreign_fetch):
@@ -222,7 +234,12 @@ class RuntimeAuthorizationTests(unittest.TestCase):
                                 )
                             )
                         with self.assertRaises(
-                            (ssl.SSLError, http.client.RemoteDisconnected, BrokenPipeError)
+                            (
+                                ssl.SSLError,
+                                http.client.RemoteDisconnected,
+                                BrokenPipeError,
+                                ConnectionResetError,
+                            )
                         ):
                             post("foreign")
                     credentials()
@@ -251,9 +268,12 @@ class RuntimeAuthorizationTests(unittest.TestCase):
                         credentials()
                     # No grant/policy rewrite between publication and rotated credentials.
                     self.assertEqual(post("worker")[0], 200)
-                    self.assertNotEqual(
-                        server_certs[-1], old_server, "server Workload API SVID did not rotate"
-                    )
+                    # Workload API readers observe the same update asynchronously.
+                    while server_certs[-1] == old_server:
+                        self.assertLess(time.monotonic(), deadline, "server SVID did not rotate")
+                        time.sleep(0.1)
+                        self.assertEqual(post("worker")[0], 403)  # Already consumed token.
+
                     not_after = (
                         subprocess.run(
                             [
@@ -277,7 +297,12 @@ class RuntimeAuthorizationTests(unittest.TestCase):
                         self.assertLess(time.monotonic(), deadline, "old SVID did not expire")
                         time.sleep(0.2)
                     with self.assertRaises(
-                        (ssl.SSLError, http.client.RemoteDisconnected, BrokenPipeError)
+                        (
+                            ssl.SSLError,
+                            http.client.RemoteDisconnected,
+                            BrokenPipeError,
+                            ConnectionResetError,
+                        )
                     ):
                         post("expired")
                     credentials()

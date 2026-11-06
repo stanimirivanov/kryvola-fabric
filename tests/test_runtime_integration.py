@@ -135,6 +135,30 @@ class RuntimeFixtureTests(unittest.TestCase):
         ):
             runtime.check_runtime()
 
+    def test_auth_probe_rejects_failure_and_skips_without_leaking_assertion_values(self):
+        success = subprocess.CompletedProcess([], 0, "", "")
+        for code, stderr in (
+            (
+                1,
+                "ERROR: test_identity (live_runtime_auth.Tests)\n"
+                '  File "tests/live_runtime_auth.py", line 1, in test_identity\n'
+                "AssertionError: secret-token",
+            ),
+            (0, "Ran 2 tests\nOK (skipped=2)"),
+            (0, "Ran 0 tests\nOK"),
+        ):
+            with patch.object(
+                runtime,
+                "_runtime_command",
+                side_effect=[
+                    success,
+                    subprocess.CompletedProcess([], code, "secret-token", stderr),
+                ],
+            ):
+                with self.assertRaisesRegex(RuntimeError, "SPIRE workload") as failure:
+                    runtime.check_workload_auth()
+                self.assertNotIn("secret-token", str(failure.exception))
+
     def test_owned_runtime_command_returns_output_and_rejects_missing_tools(self):
         result = runtime._runtime_command([sys.executable, "-c", "print('ready')"], 5)
         self.assertEqual(result.returncode, 0)
