@@ -798,3 +798,6 @@ async fn outbox_round_trip() {
             .unwrap();
     assert_eq!(count, 1);
 }
+
+#[path = "registry/finalization.rs"]
+mod finalization;

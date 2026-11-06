@@ -190,10 +190,12 @@ class RuntimeFixtureTests(unittest.TestCase):
     def test_upload_http_gate_rejects_missing_unrelated_or_skipped_proof(self):
         test = "test_scoped_streaming_reservation_manifest_and_abort"
         valid = f"{test} (live_uploads.UploadHttpTests.{test}) ... ok\nRan 1 test\nOK"
-        proof = "UPLOAD_FAILURE_CAMPAIGN_PASSED"
+        proof = "UPLOAD_FAILURE_CAMPAIGN_PASSED\nVERIFIED_FINALIZATION_HTTP_PASSED"
         for code, stdout, output in (
             (0, proof, "Ran 0 tests\nOK"),
             (0, "", valid),
+            (0, "UPLOAD_FAILURE_CAMPAIGN_PASSED", valid),
+            (0, "VERIFIED_FINALIZATION_HTTP_PASSED", valid),
             (0, proof, "Ran 1 test\nOK"),
             (0, proof, valid.replace("OK", "OK (skipped=1)")),
             (1, proof, "AssertionError: secret-credential"),

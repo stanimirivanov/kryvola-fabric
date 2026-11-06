@@ -297,7 +297,7 @@ class UploadHttpTests(unittest.TestCase):
                 self.assertEqual(request("PUT", part, issue(), b"data")[0], 409)
                 self.assertEqual(request("GET", f"/v1/uploads/{upload}", issue())[0], 404)
                 self.assertEqual(
-                    request("POST", f"/v1/uploads/{upload}/finalize", issue(), {})[0], 404
+                    request("POST", f"/v1/uploads/{upload}/finalize", issue(), {})[0], 400
                 )
                 self.assertEqual(
                     request("POST", f"/v1/uploads/{upload}/abort", issue(), abort)[0], 204
@@ -341,6 +341,94 @@ class UploadHttpTests(unittest.TestCase):
                     "WHERE operation_id='upload-http'"
                 )
                 exercise(self, request, connect, issue, sql, process, tenant, scope["attempt"])
+                status, result = request(
+                    "POST", "/v1/uploads", issue(), {**reserve, "byte_length": 4}
+                )
+                self.assertEqual(status, 201)
+                candidate = result["upload_id"]
+                finalize = f"/v1/uploads/{candidate}/finalize"
+                publication = {
+                    "schema_version": "1",
+                    "tenant_scope": tenant,
+                    "manifest_digest": corpus["digest"],
+                }
+                self.assertEqual(request("POST", finalize, issue(), publication)[0], 400)
+                self.assertEqual(
+                    request(
+                        "PUT", f"/v1/uploads/{candidate}/parts/0", issue(), bytes([0, 1, 2, 255])
+                    )[0],
+                    204,
+                )
+                self.assertEqual(
+                    request("PUT", f"/v1/uploads/{candidate}/manifest", issue(), manifest)[0], 204
+                )
+                self.assertEqual(
+                    request("POST", finalize, issue(purpose="COMPUTE_READ"), publication)[0], 403
+                )
+                self.assertEqual(
+                    request(
+                        "POST", finalize, issue(), {**publication, "manifest_digest": "e" * 64}
+                    )[0],
+                    403,
+                )
+                self.assertEqual(
+                    request("POST", finalize, issue(), {**publication, "tenant_scope": "other"})[0],
+                    403,
+                )
+                status, reference = request("POST", finalize, issue(), publication)
+                self.assertEqual(status, 200)
+                self.assertEqual(
+                    reference, {"schema_version": "1", "manifest_digest": corpus["digest"]}
+                )
+                self.assertEqual(request("POST", finalize, issue(), publication), (200, reference))
+                self.assertEqual(
+                    sql(
+                        "SELECT encode(canonical_manifest, 'hex') "
+                        f"FROM fabric_finalized_artifacts WHERE upload_id='{candidate}'"
+                    ).strip(),
+                    manifest.hex(),
+                )
+                self.assertEqual(
+                    request("POST", f"/v1/uploads/{candidate}/abort", issue(), abort)[0], 409
+                )
+                self.assertEqual(
+                    request("GET", f"/v1/artifacts/{corpus['digest']}", issue())[0], 404
+                )
+                self.assertEqual(
+                    request(
+                        "POST",
+                        "/v1/artifact-access/authorize",
+                        issue(),
+                        {**scope, "purpose": "CONSUMER_READ"},
+                    )[0],
+                    400,
+                )
+                # Fixture teardown only; this does not qualify production GC or abort.
+                for namespace in ("staging", "immutable"):
+                    cleared = subprocess.run(
+                        [
+                            "docker",
+                            "exec",
+                            os.environ["FABRIC_FIXTURE_S3_CLIENT"],
+                            "aws",
+                            "--endpoint-url",
+                            "http://s3:8333",
+                            "s3",
+                            "rm",
+                            f"s3://fabric-runtime/{namespace}/{candidate}/",
+                            "--recursive",
+                        ],
+                        capture_output=True,
+                        timeout=10,
+                        check=False,
+                    )
+                    self.assertEqual(cleared.returncode, 0, "private fixture cleanup failed")
+                sql(
+                    f"DELETE FROM fabric_finalized_artifacts WHERE upload_id='{candidate}'; "
+                    f"DELETE FROM fabric_uploads WHERE id='{candidate}'"
+                )
+                print("VERIFIED_FINALIZATION_HTTP_PASSED", flush=True)
+
                 sql(
                     "UPDATE fabric_attempts SET lease_expires_unix_ms=0 "
                     "WHERE operation_id='upload-http'"

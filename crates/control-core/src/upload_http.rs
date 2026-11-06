@@ -1,4 +1,4 @@
-//! Scoped HTTP staging. No endpoint here publishes a readable artifact reference.
+//! Scoped staging and verified metadata publication. No endpoint grants byte access.
 use crate::{
     authorization::{Authorizer, Denial},
     limits::{CHUNK_MAX_BYTES, CONTROL_BYTES},
@@ -82,7 +82,7 @@ impl UploadApi {
         let p: Vec<_> = path.split('/').collect();
         matches!(p.as_slice(), ["", "v1", "uploads", _, "parts", _] if *method == Method::PUT)
             || matches!(p.as_slice(), ["", "v1", "uploads", _, "manifest"] if *method == Method::PUT)
-            || matches!(p.as_slice(), ["", "v1", "uploads", _, "abort"] if *method == Method::POST)
+            || matches!(p.as_slice(), ["", "v1", "uploads", _, "abort" | "finalize"] if *method == Method::POST)
     }
     pub async fn handle(
         &self,
@@ -164,6 +164,23 @@ impl UploadApi {
                     .decode("CreateUploadResponse", result.as_bytes())
                     .map_err(|_| UploadError::Unavailable)?;
                 Ok((StatusCode::CREATED, result))
+            } else if path[4] == "finalize" {
+                let value = schemas
+                    .decode("FinalizeUploadRequest", &bytes)
+                    .map_err(|_| UploadError::Integrity)?;
+                if value["tenant_scope"] != permit.tenant
+                    || value["manifest_digest"] != permit.scope["manifest_digest"]
+                {
+                    return Err(UploadError::Denied);
+                }
+                let artifact = self.store.finalize_staged(permit, path[3]).await?;
+                let result =
+                    json!({"schema_version":"1", "manifest_digest":artifact.manifest_digest})
+                        .to_string();
+                schemas
+                    .decode("FinalizeUploadResponse", result.as_bytes())
+                    .map_err(|_| UploadError::Unavailable)?;
+                Ok((StatusCode::OK, result))
             } else if path[4] == "manifest" {
                 self.store.put_manifest(permit, path[3], &bytes).await?;
                 Ok((StatusCode::NO_CONTENT, String::new()))

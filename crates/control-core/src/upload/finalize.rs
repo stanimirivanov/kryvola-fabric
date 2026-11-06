@@ -1,5 +1,6 @@
 use std::sync::OnceLock;
 
+use object_store::ObjectStoreExt;
 use serde_json::Value;
 
 use super::*;
@@ -118,6 +119,34 @@ async fn read_exact_object(
 }
 
 impl UploadStore {
+    /// Read write-once private metadata under a live fence, then revalidate at publication.
+    pub async fn finalize_staged(
+        &self,
+        mut permit: UploadPermit,
+        id: &str,
+    ) -> Result<FinalizedArtifact> {
+        let mut tx = self.begin(&mut permit).await?;
+        lock_upload(&mut tx, &permit, id, self.fenced).await?;
+        let key = Path::from(format!("staging/{id}/manifest"));
+        let metadata = timeout(IO_TIMEOUT, self.objects.head(&key))
+            .await
+            .map_err(|_| UploadError::Unavailable)?
+            .map_err(|error| match error {
+                object_store::Error::NotFound { .. } => UploadError::Integrity,
+                _ => UploadError::Unavailable,
+            })?;
+        if metadata.size == 0 || metadata.size > CONTROL_BYTES as u64 {
+            return Err(UploadError::Size);
+        }
+        check_permit(&permit)?;
+        let canonical =
+            read_exact_object(self.objects.as_ref(), &key, metadata.size as usize).await?;
+        tx.rollback().await?;
+        // Dropping the read transaction avoids nesting locks. Finalize reacquires the
+        // operation/upload locks and rechecks all authority before creating any object.
+        self.finalize(permit, id, &canonical).await
+    }
+
     pub async fn finalize(
         &self,
         mut permit: UploadPermit,
@@ -135,6 +164,16 @@ impl UploadStore {
         let size = number(&manifest["serialized_bytes"])?;
         let mut tx = self.begin(&mut permit).await?;
         let upload = lock_upload(&mut tx, &permit, id, self.fenced).await?;
+        if self.fenced {
+            let context: Option<String> = sqlx::query_scalar(
+                "SELECT intent->'key_context_ref'->>'key_context_digest' FROM fabric_operations WHERE tenant_scope=$1 AND operation_id=$2"
+            ).bind(&permit.tenant).bind(permit.scope["attempt"]["operation_id"].as_str())
+                .fetch_one(&mut *tx).await?;
+            if manifest["key_context_digest"].as_str() != context.as_deref() {
+                return Err(UploadError::Denied);
+            }
+        }
+
         if upload.try_get::<i64, _>("reserved_bytes")? as u64 != size
             || upload.try_get::<i64, _>("remaining")? != 0
         {
