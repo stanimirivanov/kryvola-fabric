@@ -148,7 +148,10 @@ class RuntimeAuthorizationTests(unittest.TestCase):
 
                     expires = time.time_ns() // 1_000_000 + 45_000
                     publish("worker", expires)
-                    with self.assertRaises((ssl.SSLError, http.client.RemoteDisconnected)):
+                    # TLS rejection can arrive during the body write, before the alert is read.
+                    with self.assertRaises(
+                        (ssl.SSLError, http.client.RemoteDisconnected, BrokenPipeError)
+                    ):
                         post(None)
                     self.assertEqual(post("rotated")[0], 403)
                     for field, value in {
