@@ -190,16 +190,18 @@ class RuntimeFixtureTests(unittest.TestCase):
     def test_upload_http_gate_rejects_missing_unrelated_or_skipped_proof(self):
         test = "test_scoped_streaming_reservation_manifest_and_abort"
         valid = f"{test} (live_uploads.UploadHttpTests.{test}) ... ok\nRan 1 test\nOK"
-        for code, output in (
-            (0, "Ran 0 tests\nOK"),
-            (0, "Ran 1 test\nOK"),
-            (0, valid.replace("OK", "OK (skipped=1)")),
-            (1, "AssertionError: secret-credential"),
+        proof = "UPLOAD_FAILURE_CAMPAIGN_PASSED"
+        for code, stdout, output in (
+            (0, proof, "Ran 0 tests\nOK"),
+            (0, "", valid),
+            (0, proof, "Ran 1 test\nOK"),
+            (0, proof, valid.replace("OK", "OK (skipped=1)")),
+            (1, proof, "AssertionError: secret-credential"),
         ):
             with patch.object(
                 runtime,
                 "_runtime_command",
-                return_value=subprocess.CompletedProcess([], code, "", output),
+                return_value=subprocess.CompletedProcess([], code, stdout, output),
             ):
                 with self.assertRaisesRegex(RuntimeError, "Upload HTTP") as failed:
                     runtime.check_upload_http(
@@ -209,7 +211,9 @@ class RuntimeFixtureTests(unittest.TestCase):
                     )
                 self.assertNotIn("secret-credential", str(failed.exception))
         with patch.object(
-            runtime, "_runtime_command", return_value=subprocess.CompletedProcess([], 0, "", valid)
+            runtime,
+            "_runtime_command",
+            return_value=subprocess.CompletedProcess([], 0, proof, valid),
         ):
             runtime.check_upload_http(
                 Path("/fixture"),

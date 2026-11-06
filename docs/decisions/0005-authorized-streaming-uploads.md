@@ -42,3 +42,28 @@ controls against absent/skipped proof. It checks quota races, scope/purpose/fenc
 denials, a part above the control-body cap, canonical metadata staging and abort.
 Extended disconnect, interruption and resource campaigns belong to R7-R3. Backend
 incomplete-multipart lifecycle rules from ADR-004 remain necessary after process death.
+
+## R7-R3 failure and resource evidence (#45)
+The required F-live upload probe now observes an actual S3 multipart session before
+closing a partial-body TLS connection, stalling a body until the eight-second
+transport deadline, or expiring a write grant while its body is incomplete.
+Each case checks absence of completed staging objects, unfinished sessions, SQL
+part markers and received-byte accounting, then retries the same part index with
+a fresh grant and explicitly aborts the reservation. The owned fixture lease is
+extended directly for this campaign; that setup does not qualify a renewal API.
+
+On Linux, sample only the runtime PID's resident memory every 10 ms around an
+accepted 1-GiB reservation, rejected 1-GiB part declaration and generated 4-MiB
+maximum part. Require less than 64 MiB of RSS growth and less than 192 MiB absolute
+RSS. Kernel VmHWM and VmPeak additionally catch brief resident/mapped peaks;
+virtual peak growth must remain below 128 MiB, including lazy untouched allocations.
+These are conservative regression budgets for the pinned debug runtime, not
+a production capacity guarantee or an exact allocation counter. Successful maximum
+writes and failed streams are followed by private-prefix and multipart cleanup
+observations. No whole-artifact client buffer is used.
+
+The harness requires the campaign completion marker as well as the named test's
+successful, non-skipped result. Missing campaign evidence fails the gate. This
+campaign does not claim process-death incomplete-session cleanup, finalization
+crash coverage, or production multi-host resource sizing; ADR-004's backend lifecycle
+requirement and M1-PR8's finalization matrix remain applicable.

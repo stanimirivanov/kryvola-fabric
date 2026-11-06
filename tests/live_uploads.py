@@ -17,6 +17,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
+from upload_campaign import exercise
+
 from tools.spire_fixture import spire
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -56,7 +58,7 @@ class UploadHttpTests(unittest.TestCase):
                 "access_key_id": os.environ["AWS_ACCESS_KEY_ID"],
                 "secret_access_key": os.environ["AWS_SECRET_ACCESS_KEY"],
                 "allow_http": True,
-                "tenant_quota_bytes": 8 * 1024 * 1024,
+                "tenant_quota_bytes": 1024 * 1024 * 1024,
             }
             (folder / "s3.json").write_text(json.dumps(config))
             process = subprocess.Popen(
@@ -117,11 +119,14 @@ class UploadHttpTests(unittest.TestCase):
                     path.write_text(json.dumps(document))
                     path.replace(folder / "policy.json")
 
-                def request(method, path, token, body=None, *, name="worker", length=None):
+                def connect(name="worker"):
                     tls = ssl.create_default_context(cafile=str(folder / "runtime.ca"))
                     tls.check_hostname = False
                     tls.load_cert_chain(folder / f"{name}.pem", folder / f"{name}.key")
-                    conn = http.client.HTTPSConnection("127.0.0.1", port, context=tls, timeout=10)
+                    return http.client.HTTPSConnection("127.0.0.1", port, context=tls, timeout=12)
+
+                def request(method, path, token, body=None, *, name="worker", length=None):
+                    conn = connect(name)
                     try:
                         conn.connect()
                         assert conn.sock is not None
@@ -189,7 +194,7 @@ class UploadHttpTests(unittest.TestCase):
                     "purpose": "COMPUTE_WRITE",
                 }
 
-                def issue(**changes):
+                def issue(*, ttl_ms=45_000, **changes):
                     nonlocal counter
                     counter += 1
                     token = f"{counter:064x}"
@@ -204,7 +209,7 @@ class UploadHttpTests(unittest.TestCase):
                             "spiffe_id": "spiffe://fabric.test/worker",
                             "token_sha256": hashlib.sha256(token.encode()).hexdigest(),
                             "scope": candidate,
-                            "expires_unix_ms": time.time_ns() // 1_000_000 + 45_000,
+                            "expires_unix_ms": time.time_ns() // 1_000_000 + ttl_ms,
                         }
                     )
                     publish()
@@ -234,7 +239,7 @@ class UploadHttpTests(unittest.TestCase):
                 reserve = {
                     "schema_version": "1",
                     "tenant_scope": tenant,
-                    "byte_length": 6 * 1024 * 1024,
+                    "byte_length": 768 * 1024 * 1024,
                 }
                 tokens = [issue(), issue()]
                 with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
@@ -329,6 +334,13 @@ class UploadHttpTests(unittest.TestCase):
                     request("POST", f"/v1/uploads/{upload}/abort", issue(), abort)[0], 204
                 )
 
+                # Renew only the owned fixture lease for the extended failure campaign.
+                sql(
+                    "UPDATE fabric_attempts SET lease_expires_unix_ms="
+                    "floor(extract(epoch FROM clock_timestamp())*1000)+60000 "
+                    "WHERE operation_id='upload-http'"
+                )
+                exercise(self, request, connect, issue, sql, process, tenant, scope["attempt"])
                 sql(
                     "UPDATE fabric_attempts SET lease_expires_unix_ms=0 "
                     "WHERE operation_id='upload-http'"
