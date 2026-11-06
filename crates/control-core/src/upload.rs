@@ -12,6 +12,7 @@ use tokio::{
 };
 
 mod finalize;
+mod multipart;
 mod retention;
 use crate::{
     authorization::UploadPermit,
@@ -118,10 +119,16 @@ impl UploadStore {
         }
         let remaining: i64 = upload.try_get("remaining")?;
         // The marker and byte accounting are committed only after object creation.
+        let mut nonce = [0; 16];
+        SystemRandom::new()
+            .fill(&mut nonce)
+            .map_err(|_| UploadError::Unavailable)?;
+        let key = Path::from(format!("staging/{id}/{index}/{}", hex::encode(nonce)));
         let inserted =
-            sqlx::query("INSERT INTO fabric_upload_parts VALUES ($1, $2) ON CONFLICT DO NOTHING")
+            sqlx::query("INSERT INTO fabric_upload_parts (upload_id, part_index, object_key) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING")
                 .bind(id)
                 .bind(i32::from(index))
+                .bind(key.as_ref())
                 .execute(&mut *tx)
                 .await?;
         if inserted.rows_affected() != 1 {
@@ -132,36 +139,16 @@ impl UploadStore {
             return Err(UploadError::Size);
         }
 
-        let mut data = Vec::with_capacity(declared + 1);
-        timeout(
-            IO_TIMEOUT,
-            body.take(declared as u64 + 1).read_to_end(&mut data),
-        )
-        .await
-        .map_err(|_| UploadError::Unavailable)?
-        .map_err(|_| UploadError::Unavailable)?;
-        if data.len() != declared {
-            return Err(UploadError::Size);
-        }
-        check_permit(&permit)?;
-        let key = Path::from(format!("staging/{id}/{index}"));
-        timeout(
-            IO_TIMEOUT,
-            self.objects
-                .put_opts(&key, data.into(), PutMode::Create.into()),
-        )
-        .await
-        .map_err(|_| UploadError::Unavailable)?
-        .map_err(|error| match error {
-            object_store::Error::AlreadyExists { .. }
-            | object_store::Error::Precondition { .. } => UploadError::Conflict,
-            _ => UploadError::Unavailable,
-        })?;
+        let staged = multipart::stage(self.objects.clone(), key, declared, body, || {
+            check_permit(&permit)
+        })
+        .await?;
         sqlx::query("UPDATE fabric_uploads SET received_bytes = received_bytes + $2, touched_at = clock_timestamp() WHERE id = $1")
             .bind(id)
             .bind(declared as i64)
             .execute(&mut *tx)
             .await?;
+        staged.retain_for_commit();
         tx.commit().await?;
         Ok(())
     }

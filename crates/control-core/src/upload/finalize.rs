@@ -190,7 +190,14 @@ impl UploadStore {
             {
                 return Err(UploadError::Integrity);
             }
-            let staged = Path::from(format!("staging/{id}/{index}"));
+            let mapped: Option<String> = sqlx::query_scalar(
+                "SELECT object_key FROM fabric_upload_parts WHERE upload_id=$1 AND part_index=$2",
+            )
+            .bind(id)
+            .bind(index as i32)
+            .fetch_one(&mut *tx)
+            .await?;
+            let staged = Path::from(mapped.unwrap_or_else(|| format!("staging/{id}/{index}")));
             let bytes = read_exact_object(self.objects.as_ref(), &staged, length as usize).await?;
             let expected = digest(
                 b"kryvola/chunk/v1\0",

@@ -208,15 +208,46 @@ separate slices. See [the runtime boundary decision](decisions/0003-registry-htt
 
 The internal upload store redeems compute-write grants and binds a reservation to
 the exact verified workload SPIFFE ID and request scope. PostgreSQL serializes quota
-admission per tenant and part writes per upload. A part is capped at 4 MiB, must
-match its declared length, and uses conditional S3 creation. The caller supplies
-a bounded PostgreSQL pool, a private S3 store, and the tenant quota. Each part
-holds at most its declared bytes plus one byte while checking for overflow.
+admission per tenant and part writes per upload. M1-PR7-R1 uses the pinned
+`object_store::MultipartUpload` lifecycle for each application part. A fixed
+4-MiB buffer reads at most 64 KiB at a time and probes one extra byte; allocation
+does not depend on the declared total upload size. One application chunk is one
+final S3 multipart part, so the sub-5-MiB final-part exception applies. No parallel
+part buffers or custom S3 multipart protocol are introduced.
 
-Abort removes the private staging prefix before releasing the reservation. A
-failed or ambiguous S3 write stays outside the artifact namespace. A caller can
-abort and start a new upload after an ambiguous write. Background reclamation
-of abandoned prefixes and immutable finalization belong to later slices.
+The SDK's multipart completion overwrites its destination, so every write uses a
+fresh private `staging/{upload_id}/{part_index}/{nonce}` key. Nullable `object_key`
+in migration 0008 publishes the completed key with the part marker/byte accounting
+in the existing SQL transaction. Finalization falls back to the original path for
+NULL legacy mappings. Public artifact identities and immutable paths are unchanged;
+keys contain no endpoint, bucket credentials, bearer tokens or provider upload IDs.
+
+Read, length, write, completion and permit errors attempt multipart abort and
+private-key deletion; cancellation schedules cleanup with 15-second budgets per
+abort/delete call. Cleanup attempts deletion even if abort fails and emits only
+`upload_cleanup_failed` on background failure. Cleanup stays armed through SQL
+preparation; immediately before commit it retains completed bytes because a lost
+commit acknowledgement must not delete a possibly referenced object. Completed
+orphans remain private and can be swept by the existing upload-prefix reclamation.
+A caller must abort/restart an upload after an ambiguous write, as before.
+
+A process crash, runtime shutdown or lost multipart-initiation response cannot
+reliably run async abort. Configure backend lifecycle rules for incomplete sessions;
+ordinary object listing/reclamation alone cannot remove incomplete multipart data.
+Unit tests inject read/write/completion/abort failures and cancellation; F-live
+verifies new mappings, legacy finalization, quota/overwrite/cleanup invariants and
+no unfinished sessions. Public upload routes and extended failure campaigns remain
+M1-PR7-R2/R3 work.
+
+**Rollout/rollback:** quiesce writers and apply the additive nullable migration
+before updating the service. New code reads both layouts; rollback to old code
+requires draining/aborting newly mapped temporary uploads first, then running
+SQLx undo to version 7 with the supplied down migration so old migration validation
+accepts the database. The guard refuses rollback while mapped temporary parts
+remain. It preserves the nullable column, finalized objects and operation history;
+reapplying the up migration is safe. Use an operator-controlled migration runner;
+no database rollback endpoint or standalone migration CLI is introduced. The caller still supplies a
+bounded PostgreSQL pool, a private S3 store and tenant quota.
 
 The live gate now exposes the fixture S3 service on an ephemeral IPv4 loopback
 port for the Rust client. PostgreSQL remains on the private Unix socket. No
