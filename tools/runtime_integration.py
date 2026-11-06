@@ -1,4 +1,4 @@
-"""Exercise the Fabric fixture boundary with real PostgreSQL and S3 services."""
+"""Verify the bounded Fabric runtime and real PostgreSQL/S3/broker fixtures."""
 
 import argparse
 import json
@@ -268,6 +268,48 @@ def check_registry(folder: Path, test: str, **settings: str) -> None:
         raise RuntimeError(f"Registry probe {test} did not run")
 
 
+def _runtime_command(command: list[str], timeout: float) -> subprocess.CompletedProcess[str]:
+    """Own the cargo/test/runtime process group, including timeout and signal cleanup."""
+    process = subprocess.Popen(
+        command,
+        cwd=Path(__file__).resolve().parents[1],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        errors="replace",
+        start_new_session=True,
+    )
+    try:
+        stdout, stderr = process.communicate(timeout=timeout)
+        return subprocess.CompletedProcess(command, process.wait(), stdout, stderr)
+    finally:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        try:
+            process.communicate(timeout=10)
+        finally:
+            if process.stdout:
+                process.stdout.close()
+            if process.stderr:
+                process.stderr.close()
+
+
+def check_runtime() -> None:
+    command = ["cargo", "test", "--locked", "-p", "kryvola-fabric-core", "--test", "runtime"]
+    # Keep cold compilation separate from the actual health/bounds execution deadline.
+    require(_runtime_command([*command, "--no-run"], 600), "Runtime probe build")
+    test = "loopback_shell_bounds_requests_and_denies_runtime_routes"
+    result = _runtime_command(
+        [*command, "--", "--exact", test, "--color", "never"],
+        30,
+    )
+    output = require(result, "Bounded runtime probe")
+    if "1 passed; 0 failed" not in output or f"test {test} ... ok" not in output:
+        raise RuntimeError("Bounded runtime probe did not run")
+
+
 def run(folder: Path) -> None:
     host = os.environ.get("DOCKER_HOST", "")
     if host and not host.startswith("unix://"):
@@ -287,6 +329,7 @@ def run(folder: Path) -> None:
 
     try:
         require(invoke("up", "-d", "--wait", "--wait-timeout=90", timeout=600), "Fixture startup")
+        check_runtime()
         check_postgres(invoke)
         check_registry(folder, "durable_registry")
         require(invoke("restart", "postgres", timeout=90), "PostgreSQL restart")
@@ -354,7 +397,7 @@ def main() -> int:
     except (OSError, subprocess.TimeoutExpired, KeyboardInterrupt) as error:
         print(f"Runtime integration: {type(error).__name__}", file=sys.stderr)
         return 1
-    print("Runtime integration passed: PostgreSQL, SeaweedFS, and Redpanda.")
+    print("Runtime integration passed: bounded runtime, PostgreSQL, SeaweedFS, and Redpanda.")
     return 0
 
 

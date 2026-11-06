@@ -249,3 +249,21 @@ surfaced as BrokenPipeError during the request body write. That specific negativ
 case now accepts the observed transport failure, while any HTTP response still
 fails its assertion and subsequent authenticated requests verify server liveness.
 The original traceback is retained in local verification logs.
+
+
+## M1-PR4-R2 — F-live verifies the bounded runtime (issue #33)
+
+The standalone live gate builds and executes the existing exact Rust runtime
+probe inside its owned fixture lifecycle. The probe launches the actual shell and
+checks health, deny-by-default routing, bounded error bodies, oversized declared
+and chunked bodies, and stalled-request rejection. A successful command with zero
+or ignored tests, or a different test name, is rejected. Cold compilation has a separate 600-second budget;
+probe execution has 30 seconds. Runtime/cargo children share an owned process group
+which is killed and drained on completion, timeout or interruption. The same owned
+Compose project is cleaned on failure; existing SQL/S3/broker probes remain required.
+
+Verification: the bypass regression failed before wiring the probe. Focused lifecycle
+and failure controls pass; a deliberately unhealthy real shell made standalone
+F-live fail and its owned Compose project was removed. The runtime source was
+restored, and healthy standalone F-live passed all probes. Full publication qualification
+requires a clean committed checkout; its final outcome is retained in the PR.
