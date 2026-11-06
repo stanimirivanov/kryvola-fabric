@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
+from finalization_recovery import exercise as recover_finalization
 from upload_campaign import exercise
 
 from tools.spire_fixture import spire
@@ -35,18 +36,23 @@ class UploadHttpTests(unittest.TestCase):
             spire(Path(temporary) / "spire", ttl=45) as (agent, fetch, _),
         ):
             folder = Path(temporary)
-            for svid in fetch()["svids"]:
-                name = svid["spiffe_id"].rsplit("/", 1)[1]
-                for field, suffix, label in (
-                    ("x509_svid", "pem", "CERTIFICATE"),
-                    ("x509_svid_key", "key", "PRIVATE KEY"),
-                    ("bundle", "ca", "CERTIFICATE"),
-                ):
-                    (folder / f"{name}.{suffix}").write_text(
-                        ssl.DER_cert_to_PEM_cert(base64.b64decode(svid[field])).replace(
-                            "CERTIFICATE", label
+
+            def refresh():
+                for svid in fetch()["svids"]:
+                    name = svid["spiffe_id"].rsplit("/", 1)[1]
+                    for field, suffix, label in (
+                        ("x509_svid", "pem", "CERTIFICATE"),
+                        ("x509_svid_key", "key", "PRIVATE KEY"),
+                        ("bundle", "ca", "CERTIFICATE"),
+                    ):
+                        (folder / f"{name}.{suffix}").write_text(
+                            ssl.DER_cert_to_PEM_cert(base64.b64decode(svid[field])).replace(
+                                "CERTIFICATE", label
+                            )
                         )
-                    )
+
+            refresh()
+            audits = []
             db = folder / "database.url"
             db.write_text(
                 f"postgresql://postgres@localhost/postgres?host={quote(str(socket), safe='')}"
@@ -90,7 +96,7 @@ class UploadHttpTests(unittest.TestCase):
                 operation.update(
                     operation_id="upload-http",
                     idempotency_key="upload-http",
-                    deadline_unix_ms=str(time.time_ns() // 1_000_000 + 120_000),
+                    deadline_unix_ms=str(time.time_ns() // 1_000_000 + 300_000),
                 )
                 tenant = operation["tenant_scope"]
                 coordinator = "f" * 64
@@ -429,6 +435,44 @@ class UploadHttpTests(unittest.TestCase):
                 )
                 print("VERIFIED_FINALIZATION_HTTP_PASSED", flush=True)
 
+                def restart():
+                    nonlocal process, port, boot
+                    process.kill()
+                    _, previous_audit = process.communicate(timeout=5)
+                    self.assertEqual(process.returncode, -9, "runtime must really be SIGKILLed")
+                    audits.append(previous_audit)
+                    refresh()
+                    process = subprocess.Popen(
+                        process.args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+                    )
+                    assert process.stdout is not None
+                    self.assertTrue(select.select([process.stdout], [], [], 15)[0])
+                    line = process.stdout.readline()
+                    self.assertTrue(line, "recovery runtime did not start")
+                    address, boot = line.split()
+                    port = int(address.rsplit(":", 1)[1])
+                    grants.clear()
+                    publish()
+
+                def configure(private_endpoint):
+                    config["endpoint"] = private_endpoint
+                    (folder / "s3.json").write_text(json.dumps(config))
+
+                recover_finalization(
+                    self,
+                    request,
+                    connect,
+                    issue,
+                    sql,
+                    restart,
+                    refresh,
+                    configure,
+                    endpoint,
+                    tenant,
+                    manifest,
+                    corpus["digest"],
+                )
+
                 sql(
                     "UPDATE fabric_attempts SET lease_expires_unix_ms=0 "
                     "WHERE operation_id='upload-http'"
@@ -450,9 +494,11 @@ class UploadHttpTests(unittest.TestCase):
             finally:
                 process.terminate()
                 _, audit = process.communicate(timeout=5)
+                audit = "".join([*audits, audit])
             for secret in (
                 config["access_key_id"],
                 config["secret_access_key"],
+                str(config["endpoint"]),
                 endpoint,
                 "upload-http",
                 "forged-tenant",

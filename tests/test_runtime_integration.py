@@ -190,10 +190,32 @@ class RuntimeFixtureTests(unittest.TestCase):
     def test_upload_http_gate_rejects_missing_unrelated_or_skipped_proof(self):
         test = "test_scoped_streaming_reservation_manifest_and_abort"
         valid = f"{test} (live_uploads.UploadHttpTests.{test}) ... ok\nRan 1 test\nOK"
-        proof = "UPLOAD_FAILURE_CAMPAIGN_PASSED\nVERIFIED_FINALIZATION_HTTP_PASSED"
+        previous = "UPLOAD_FAILURE_CAMPAIGN_PASSED\nVERIFIED_FINALIZATION_HTTP_PASSED"
+        markers = previous + "\nFINALIZATION_RECOVERY_PASSED"
+        boundaries = (
+            "fresh-race",
+            "before",
+            "after",
+            "unavailable",
+            "lost_ack",
+            "before_insert",
+            "after_insert",
+            "commit",
+            "db_disconnect",
+            "response_lost",
+            "conflicting_copy",
+        )
+        proof = (
+            markers
+            + "\n"
+            + "\n".join(f"Finalization boundary passed: {boundary}" for boundary in boundaries)
+        )
         for code, stdout, output in (
             (0, proof, "Ran 0 tests\nOK"),
             (0, "", valid),
+            (0, previous, valid),
+            (0, markers, valid),
+            (0, proof.replace("Finalization boundary passed: commit", ""), valid),
             (0, "UPLOAD_FAILURE_CAMPAIGN_PASSED", valid),
             (0, "VERIFIED_FINALIZATION_HTTP_PASSED", valid),
             (0, proof, "Ran 1 test\nOK"),

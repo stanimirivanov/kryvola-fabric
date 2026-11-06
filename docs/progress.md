@@ -332,8 +332,34 @@ access. A separate real SQL/S3 handler probe verifies a two-chunk success and re
 corruption, truncation, total size, ordering, offsets, indices, key context, blob
 digest, unknown fields and noncanonical manifests before metadata publication.
 Failed verification can leave private immutable copies until abort/reclamation.
-Fresh creation races and process/storage/SQL/response-loss recovery remain R8-R2;
-this slice does not claim that crash matrix has been qualified.
+R1 alone did not qualify fresh races or process/storage/SQL/response-loss recovery.
+
+M1-PR8-R2 makes the following real-service matrix mandatory in F-live. Each row
+starts without immutable objects or published metadata; recovery uses fresh grants
+and the same durable reservation. Test-only SQL/S3 teardown is not production GC.
+
+| Boundary | Actual fault / required outcome |
+|---|---|
+| Fresh creation | Two concurrent HTTPS finalizers agree; one exact canonical manifest and immutable byte sequence remain. |
+| Before immutable PUT | Proxy observes the request before forwarding; SIGKILL leaves no immutable copy or SQL publication. |
+| After immutable PUT | Real S3 commits bytes before its reply is held; SIGKILL leaves private bytes and no SQL publication. |
+| Storage unavailable / lost S3 acknowledgement | HTTP 503 or a dropped successful PUT reply exercises SDK failures/retries; durable state is absent or fully valid, then retry converges. |
+| Before / after metadata INSERT | Fixture-only PostgreSQL triggers raise real SQL errors; both leave no committed metadata despite completed private copies. |
+| COMMIT | A deferred constraint trigger fails at commit, proving SQL rollback after the insert/touch statements. |
+| Database connection | A trigger signals entry through an advisory lock; the test terminates that real backend, verifies 503 and no publication, then retries. |
+| Committed / response unobserved | Observe SQL commit without reading the HTTPS reply, SIGKILL/restart the runtime, then retry returns the same verified result. |
+| Conflicting crash-created copy | Corrupt an actual post-copy crash orphan; retry must reject without overwriting it or publishing metadata. |
+
+Successful recovery checks canonical bytes, recorded manifest digest and exact S3
+bytes. Committed results reject part replacement and mismatched finalization.
+The local wire proxy and SQL triggers exist only in owned test fixtures; production
+has no failure switches. SPIRE certificates and boot-bound grants refresh across
+real process restarts; fixture lease setup is explicit. The live probe's outer
+budget is now 180 seconds; production transport, storage and SQL deadlines are
+unchanged. All eleven boundary evidence lines and the completion marker are required;
+missing/skipped proof fails, and passing boundary lines are retained in CI output.
+This qualifies the listed small-artifact transitions, not maximum-artifact throughput,
+all possible network/storage failures or incomplete-multipart cleanup after machine loss.
 
 ## M1-PR9 fenced result selection
 
