@@ -432,6 +432,7 @@ def check_upload_http(folder: Path, storage_env: dict[str, str], invoke: Invoke)
     test = "test_scoped_streaming_reservation_manifest_and_abort"
     if (
         result.returncode
+        or "VERIFIED_FINALIZATION_HTTP_PASSED" not in result.stdout.splitlines()
         or "UPLOAD_FAILURE_CAMPAIGN_PASSED" not in result.stdout.splitlines()
         or f"{test} (live_uploads.UploadHttpTests.{test}) ... ok" not in result.stderr
         or "Ran 1 test" not in result.stderr
@@ -492,6 +493,13 @@ def run(folder: Path) -> None:
         check_registry(
             folder,
             "bounded_uploads",
+            FABRIC_FIXTURE_S3_ENDPOINT=f"http://{endpoint}",
+            AWS_ACCESS_KEY_ID=env["AWS_ACCESS_KEY_ID"],
+            AWS_SECRET_ACCESS_KEY=env["AWS_SECRET_ACCESS_KEY"],
+        )
+        check_registry(
+            folder,
+            "finalization::verified_finalization",
             FABRIC_FIXTURE_S3_ENDPOINT=f"http://{endpoint}",
             AWS_ACCESS_KEY_ID=env["AWS_ACCESS_KEY_ID"],
             AWS_SECRET_ACCESS_KEY=env["AWS_SECRET_ACCESS_KEY"],

@@ -308,6 +308,33 @@ unreachable private copies for the later reclamation slice. The live test uses
 the pinned Spec golden vector and checks corruption, incomplete input, retry
 after an interrupted copy, and concurrent finalization against PostgreSQL and S3.
 
+M1-PR8-R1 exposes `POST /v1/uploads/{id}/finalize` through the existing opt-in
+SPIFFE/registry/upload runtime. Its pinned request names the tenant and manifest
+digest; its response is exactly `schema_version` and the verified `manifest_digest`.
+No new ArtifactRef format, fetch endpoint or consumer release capability is added.
+Unsupported consumer-purpose requests remain schema-rejected and candidate bytes
+remain private. Native TFHE decoding and disclosure authorization are outside Fabric.
+
+A fresh compute-write grant must match the reservation and current registry fence.
+The handler reads only the write-once staged canonical manifest (at most 64 KiB)
+under the operation/upload locks, then releases that read transaction and reacquires
+both locks before any immutable copy or publication. This avoids nested transactions;
+the second admission rechecks barriers, selection, attempt/operation and transport
+deadlines. Fenced finalization also matches the manifest key context to the durable
+operation, so even a grant for substituted context cannot publish it. Legacy trusted
+internal callers retain their permit-only interface. No migration, dependency or
+contract pin changes; omitting `--uploads` disables the endpoint on rollback.
+The existing eight-second connection deadline remains; maximum-artifact throughput
+is not qualified by these small multi-chunk fixtures.
+
+F-live requires positive HTTPS finalization/retry plus explicit absence of consumer
+access. A separate real SQL/S3 handler probe verifies a two-chunk success and rejects
+corruption, truncation, total size, ordering, offsets, indices, key context, blob
+digest, unknown fields and noncanonical manifests before metadata publication.
+Failed verification can leave private immutable copies until abort/reclamation.
+Fresh creation races and process/storage/SQL/response-loss recovery remain R8-R2;
+this slice does not claim that crash matrix has been qualified.
+
 ## M1-PR9 fenced result selection
 
 The internal coordinator registry registers physical execution IDs under a live
