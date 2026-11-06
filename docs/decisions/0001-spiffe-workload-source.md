@@ -50,3 +50,5 @@ keeps its existing internal field name but records the SPIFFE ID. Fixture TTLs
 are ten seconds; reconnects can retain accepted provider state until SVID expiry.
 The maximum revocation/cache TTL, exhaustive audit and redemption-capacity fixes
 remain M1-PR5-R2 and are not claimed complete here.
+
+ADR-002 records the subsequent M1-PR5-R2 bounds and replay-retention decision.

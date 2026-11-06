@@ -8,6 +8,7 @@ pub mod registry;
 pub mod runtime_contract;
 pub mod upload;
 pub mod wire;
+pub mod workload;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct ControlTooLarge {

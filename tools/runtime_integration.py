@@ -330,7 +330,7 @@ def check_workload_auth() -> None:
             "live_runtime_auth.py",
             "-v",
         ],
-        120,
+        180,
     )
     if (
         result.returncode

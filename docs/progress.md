@@ -104,17 +104,41 @@ and integer `expires_unix_ms`. Generate a fresh random 32-byte lowercase-hex tok
 and send it only in the HTTPS Authorization header. The grant matches one exact
 workload, tenant, operation, workflow/attempt epochs, fence, manifest and purpose.
 Only expiries within the next 60 seconds are accepted. Redemption consumes the
-token for that process; a new boot ID invalidates old grants. The existing 4,096
-redemption cap remains until M1-PR5-R2.
+token through the grant's original expiry; a new boot ID invalidates old grants.
+M1-PR5-R2 retains at most 4,096 **unexpired** consumed token hashes. Capacity denies
+new redemptions while full, then recovers as entries expire; live replay records
+are never evicted. Policy edits cannot shorten that retention. Issuers must use a
+fresh random token for every grant, never reissue an expired token value, and keep
+policy files bound to the current boot. A wall-clock rollback below the observed
+redemption high-water mark fails closed until time catches up.
 
 Policy is reread on every check, so replacement/removal applies on the next read.
-Provider terminal closure fails new TLS material acquisitions closed; transport
-reconnects retain the last accepted material, whose certificate expiry is still
-checked during TLS. This does **not** establish the planned maximum identity
-revocation/cache TTL: bounded freshness, exhaustive denial auditing and redemption
-capacity recovery remain M1-PR5-R2 work. Existing connections last at most eight
-seconds and disable HTTP keep-alive. Authorization returns only expiry, serves no
-artifact bytes, and cannot substitute for current-attempt SQL fencing.
+M1-PR5-R2 gives each freshly acquired Workload API source a **15-second monotonic
+lease**, measured from retrieval start. A fresh source is acquired every five
+seconds with a three-second refresh budget. Failed refresh does not extend the
+lease. Both TCP admission and authorization after body reading check the captured
+lease, so established connections cannot extend stale trust. Upstream source/watch
+tasks cancel when their configuration is dropped. TLS resumption stays disabled.
+
+Both server and peer SVIDs must have **at most 60 seconds total validity**, including
+issuer backdating. Configure SPIRE registration TTL accordingly (the live fixture
+uses 45 seconds plus SPIRE's ten-second backdating). Certificate expiry is checked
+again after body reading. Identity revocation therefore relies on issuance stopping
+and the last accepted SVID expiring within 60 seconds; local trust-bundle staleness
+is bounded by 15 seconds after the last successful provider retrieval. These are
+local enforcement bounds, not a claim about when SPIRE server/agent propagation
+finishes. Production propagation and attestation remain Platform responsibilities.
+Policy removal/replacement still takes effect on the next read, with no policy cache.
+
+Denial records contain only `runtime_auth_denied` and a closed reason code:
+`credential`, `policy`, `expiry`, `replay`, `capacity`, `clock`, `invalid_scope`,
+`body`, `deadline`, `handshake`, `identity`, or `provider`. Identity, scope, raw
+credentials, parser errors and request bytes are excluded. Live tests exercise
+HTTP/TLS denial reasons, concurrent single-use redemption, policy revocation and
+provider outage; deterministic Rust tests cover TTL boundaries and capacity recovery.
+Authenticated HTTP connections last at most eight seconds, disable keep-alive,
+and return only grant expiry. No route serves artifact bytes or replaces SQL fencing.
+See [the bounded authorization decision](decisions/0002-bounded-authorization.md).
 
 Install the checksum-pinned local fixture with `uv run --locked python tools/install_spire.py`.
 F-live (`uv run --locked --extra conformance python tools/runtime_integration.py ci`)
