@@ -45,3 +45,10 @@ credential rotation continues through the upstream SPIFFE/rustls adapter.
 SPIRE TTLs whose complete validity including backdating fits 60 seconds before
 rollout. Rolling back restores previous unbounded reconnect retention and the
 lifetime redemption cutoff; boot-bound policy must be reprovisioned on any restart.
+
+The longer live tests exposed a fixture allocation defect: SeaweedFS's default
+seven-volume growth filled the two-slot server before the bucket's collection
+could allocate. F-live now primes the default collection and permits fourteen
+32-MiB slots (seven each for default and bucket collections). Both allocations
+and conditional create/overwrite/read assertions remain mandatory. This corrects
+the required local harness, not production storage behavior or the milestone plan.

@@ -109,6 +109,11 @@ async fn handle(
                 return reply(StatusCode::BAD_REQUEST, RuntimeCode::InvalidRequest.body());
             };
             match authorizer.redeem(workload, token, &scope) {
+                // Policy I/O must not let a previously valid identity/lease authorize late.
+                Some(_) if Instant::now() >= provider_deadline => deny(Denial::Provider),
+                Some(_) if !now_unix_ms().is_some_and(|now| now < identity_expiry) => {
+                    deny(Denial::Identity)
+                }
                 Some(expiry) => reply(
                     StatusCode::OK,
                     format!(r#"{{"schema_version":"1","expires_unix_ms":"{expiry}"}}"#),

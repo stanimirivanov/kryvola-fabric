@@ -145,7 +145,7 @@ def fixture(folder: Path) -> tuple[Path, dict[str, str]]:
                             "chmod 600 /data/fixture-s3.json; "
                             "exec /entrypoint.sh server -dir=/data -ip=s3 -ip.bind=0.0.0.0 "
                             "-filer -s3 -s3.config=/data/fixture-s3.json "
-                            "-volume.max=2 -master.volumeSizeLimitMB=32"
+                            "-volume.max=14 -master.volumeSizeLimitMB=32"
                         ],
                         "volumes": [f"{config}:/fixture.json:ro"],
                     },
@@ -212,7 +212,18 @@ def check_s3(invoke: Invoke) -> None:
     deadline = time.monotonic() + 45
     while time.monotonic() < deadline:
         if s3("create-bucket", read_timeout=3).returncode == 0:
-            break
+            # Bucket metadata can be ready before volume registration. Qualify both.
+            allocation = invoke(
+                "exec",
+                "-T",
+                "s3",
+                "wget",
+                "-qO-",
+                "http://127.0.0.1:9333/dir/assign?count=1",
+                timeout=10,
+            )
+            if allocation.returncode == 0 and json.loads(allocation.stdout).get("fid"):
+                break
         time.sleep(1)
     else:
         raise RuntimeError("S3 fixture did not become ready")

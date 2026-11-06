@@ -315,4 +315,39 @@ mod tests {
         assert!(!grant_live(60_011, 10));
         assert!(!grant_live(0, u64::MAX));
     }
+    #[test]
+    fn expired_redemptions_do_not_create_a_lifetime_cutoff() {
+        struct Cleanup(PathBuf);
+        impl Drop for Cleanup {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_file(&self.0);
+            }
+        }
+        let mut auth = Authorizer::new(PathBuf::new()).unwrap();
+        auth.path = std::env::temp_dir().join(format!("fabric-replay-{}.json", auth.boot_id()));
+        let _cleanup = Cleanup(auth.path.clone());
+        let workload: SpiffeId = "spiffe://fabric.test/worker".parse().unwrap();
+        let scope = Scope::decode(br#"{"schema_version":"1","attempt":{"schema_version":"1","tenant_scope":"tenant","operation_id":"op","workflow_epoch":"1","attempt_epoch":"1","fence":"1"},"manifest_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","purpose":"COMPUTE_READ"}"#).unwrap();
+        for n in 0..=MAX_REDEEMED {
+            if n == MAX_REDEEMED {
+                std::thread::sleep(std::time::Duration::from_millis(1100));
+            }
+            let token = sha256_hex(&n.to_le_bytes());
+            let expiry = now_unix_ms().unwrap() + 1000;
+            std::fs::write(
+                &auth.path,
+                serde_json::json!({"boot_id":auth.boot_id(), "grants":[{
+                    "spiffe_id":workload.to_string(), "token_sha256":sha256_hex(token.as_bytes()),
+                    "scope":scope, "expires_unix_ms":expiry
+                }]})
+                .to_string(),
+            )
+            .unwrap();
+            assert_eq!(
+                auth.redeem(&workload, &token, &scope),
+                Some(expiry),
+                "expired redemptions must not cause a lifetime cutoff"
+            );
+        }
+    }
 }
