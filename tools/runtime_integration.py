@@ -403,6 +403,44 @@ def check_registry_http(folder: Path, invoke: Invoke) -> None:
         raise RuntimeError("Registry HTTP probe failed or did not run\n" + "\n".join(frames))
 
 
+def check_upload_http(folder: Path, storage_env: dict[str, str], invoke: Invoke) -> None:
+    container = require(invoke("ps", "-q", "postgres"), "PostgreSQL container identity").strip()
+    env = {
+        **os.environ,
+        **storage_env,
+        "FABRIC_FIXTURE_PG_SOCKET": str(folder / "postgres-socket"),
+        "FABRIC_FIXTURE_PG_CONTAINER": container,
+    }
+    result = _runtime_command(
+        [
+            sys.executable,
+            "-m",
+            "unittest",
+            "discover",
+            "-s",
+            "tests",
+            "-p",
+            "live_uploads.py",
+            "-v",
+        ],
+        90,
+        env=env,
+    )
+    test = "test_scoped_streaming_reservation_manifest_and_abort"
+    if (
+        result.returncode
+        or f"{test} (live_uploads.UploadHttpTests.{test}) ... ok" not in result.stderr
+        or "Ran 1 test" not in result.stderr
+        or not result.stderr.rstrip().endswith("OK")
+    ):
+        frames = [
+            line
+            for line in result.stderr.splitlines()
+            if line.startswith(("FAIL: ", "ERROR: ", '  File "'))
+        ]
+        raise RuntimeError("Upload HTTP probe failed or did not run\n" + "\n".join(frames))
+
+
 def run(folder: Path) -> None:
     host = os.environ.get("DOCKER_HOST", "")
     if host and not host.startswith("unix://"):
@@ -438,6 +476,15 @@ def run(folder: Path) -> None:
         host, _, port = endpoint.rpartition(":")
         if host != "127.0.0.1" or not port.isascii() or not port.isdecimal():
             raise RuntimeError("S3 fixture endpoint must be loopback")
+        check_upload_http(
+            folder,
+            {
+                "FABRIC_FIXTURE_S3_ENDPOINT": f"http://{endpoint}",
+                "AWS_ACCESS_KEY_ID": env["AWS_ACCESS_KEY_ID"],
+                "AWS_SECRET_ACCESS_KEY": env["AWS_SECRET_ACCESS_KEY"],
+            },
+            invoke,
+        )
         check_registry(
             folder,
             "bounded_uploads",

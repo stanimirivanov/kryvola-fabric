@@ -138,6 +138,9 @@ fn read_u64(row: &sqlx::postgres::PgRow, column: &str) -> Result<u64> {
 }
 
 impl Registry {
+    pub(crate) fn pool(&self) -> PgPool {
+        self.pool.clone()
+    }
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
@@ -201,6 +204,52 @@ impl Registry {
             ELSE NULL END FROM fabric_operations o WHERE tenant_scope=$1 AND operation_id=$2")
             .bind(key.tenant_scope).bind(key.operation_id).fetch_optional(&self.pool).await?
             .ok_or(RegistryError::NotFound)
+    }
+
+    pub(crate) async fn upload_deadline(
+        tx: &mut Transaction<'_, Postgres>,
+        scope: &Value,
+    ) -> Result<std::time::Instant> {
+        let attempt = &scope["attempt"];
+        let tenant = string(attempt, "tenant_scope")?;
+        let operation = string(attempt, "operation_id")?;
+        let key = OperationKey {
+            tenant_scope: &tenant,
+            operation_id: &operation,
+        };
+        let number = |field: &str| -> Result<u64> {
+            string(attempt, field)?
+                .parse()
+                .map_err(|_| RegistryError::InvalidIntent)
+        };
+        let row = sqlx::query("SELECT intent->>'workflow_epoch' AS workflow, intent->>'deadline_unix_ms' AS deadline FROM fabric_operations WHERE tenant_scope=$1 AND operation_id=$2 FOR UPDATE")
+            .bind(&tenant).bind(&operation).fetch_optional(&mut **tx).await?.ok_or(RegistryError::NotFound)?;
+        if read_u64(&row, "workflow")? != number("workflow_epoch")? {
+            return Err(RegistryError::StaleWorkflow);
+        }
+        barriers::require_open(tx, key).await?;
+        if selection::read_selection(&mut **tx, key).await?.is_some() {
+            return Err(RegistryError::SelectionConflict);
+        }
+        let started = std::time::Instant::now();
+        let now: i64 =
+            sqlx::query_scalar("SELECT floor(extract(epoch FROM clock_timestamp())*1000)::bigint")
+                .fetch_one(&mut **tx)
+                .await?;
+        let now = u64::try_from(now).map_err(|_| RegistryError::Unavailable)?;
+        let (lease, retired) = current_attempt(tx, key, now)
+            .await?
+            .ok_or(RegistryError::StaleFence)?;
+        if retired || now >= read_u64(&row, "deadline")? {
+            return Err(RegistryError::AttemptExpired);
+        }
+        if lease.attempt_epoch != number("attempt_epoch")? || lease.fence != number("fence")? {
+            return Err(RegistryError::StaleFence);
+        }
+        Ok(started
+            + std::time::Duration::from_millis(
+                lease.expires_unix_ms.min(read_u64(&row, "deadline")?) - now,
+            ))
     }
 
     /// The caller is the authenticated workflow authority, not a worker or an activity retry.

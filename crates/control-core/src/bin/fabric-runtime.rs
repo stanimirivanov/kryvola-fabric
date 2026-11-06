@@ -20,6 +20,7 @@ use kryvola_fabric_core::{
     limits::CONTROL_BYTES,
     registry_http::RegistryApi,
     runtime_contract::{RuntimeCode, RuntimeValidator},
+    upload_http::UploadApi,
     workload::{Lease, PROVIDER_REFRESH, PROVIDER_TTL, identity_expiry},
 };
 use spiffe::{SpiffeId, X509Source, X509Svid, x509_source::SvidPicker};
@@ -59,7 +60,7 @@ fn bearer(headers: &axum::http::HeaderMap) -> Option<&str> {
 }
 
 async fn boundary(State(runtime): State<Arc<RuntimeValidator>>, request: Request) -> Response {
-    handle(request, None, &runtime, None).await
+    handle(request, None, &runtime, None, None).await
 }
 
 async fn handle(
@@ -67,7 +68,14 @@ async fn handle(
     peer: Option<(&SpiffeId, &Authorizer, u64, Instant)>,
     runtime: &RuntimeValidator,
     registry: Option<&RegistryApi>,
+    uploads: Option<&UploadApi>,
 ) -> Response {
+    if let (Some(authorization), Some(api)) = (peer, uploads)
+        && UploadApi::matches(request.method(), request.uri().path())
+    {
+        let (status, body) = api.handle(request, authorization, runtime).await;
+        return reply(status, body);
+    }
     let authorize =
         request.method() == Method::POST && request.uri() == "/v1/artifact-access/authorize";
     let (headers, body) = request.into_parts();
@@ -233,8 +241,9 @@ async fn serve_mtls(
     refreshed: Instant,
     auth: Arc<Authorizer>,
     runtime: Arc<RuntimeValidator>,
-    registry: Option<Arc<RegistryApi>>,
+    services: (Option<Arc<RegistryApi>>, Option<Arc<UploadApi>>),
 ) -> std::io::Result<()> {
+    let (registry, uploads) = services;
     let (endpoint, identity) = workload;
     let leases = Arc::new(RwLock::new(Lease {
         value: initial,
@@ -279,6 +288,7 @@ async fn serve_mtls(
         let auth = auth.clone();
         let runtime = runtime.clone();
         let registry = registry.clone();
+        let uploads = uploads.clone();
         tokio::spawn(async move {
             let _slot = slot;
             let Ok(Ok((stream, identity))) =
@@ -308,6 +318,7 @@ async fn serve_mtls(
                         Some((peer, &auth, expiry, provider_deadline)),
                         &runtime,
                         registry.as_deref(),
+                        uploads.as_deref(),
                     )
                     .await,
                 )
@@ -341,10 +352,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .await?;
         }
         [mode, endpoint, identity, policy, remaining @ ..] if mode == "--spiffe" => {
-            let registry = match remaining {
-                [] => None,
+            let (registry, uploads) = match remaining {
+                [] => (None, None),
                 [flag, path] if flag == "--registry" => {
-                    Some(Arc::new(RegistryApi::connect(path).await?))
+                    (Some(Arc::new(RegistryApi::connect(path).await?)), None)
+                }
+                [flag, path, storage, config] if flag == "--registry" && storage == "--uploads" => {
+                    let registry = Arc::new(RegistryApi::connect(path).await?);
+                    let uploads = Arc::new(UploadApi::connect(registry.pool(), config)?);
+                    (Some(registry), Some(uploads))
                 }
                 _ => return Err("invalid registry configuration arguments".into()),
             };
@@ -362,13 +378,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 refreshed,
                 auth,
                 runtime,
-                registry,
+                (registry, uploads),
             )
             .await?;
         }
         _ => {
             return Err(
-                "usage: fabric-runtime [--spiffe WORKLOAD_API_ENDPOINT SERVER_SPIFFE_ID POLICY [--registry DATABASE_URL_FILE]]"
+                "usage: fabric-runtime [--spiffe WORKLOAD_API_ENDPOINT SERVER_SPIFFE_ID POLICY [--registry DATABASE_URL_FILE [--uploads S3_CONFIG_FILE]]]"
                     .into(),
             );
         }
