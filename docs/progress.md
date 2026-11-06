@@ -236,7 +236,7 @@ reliably run async abort. Configure backend lifecycle rules for incomplete sessi
 ordinary object listing/reclamation alone cannot remove incomplete multipart data.
 Unit tests inject read/write/completion/abort failures and cancellation; F-live
 verifies new mappings, legacy finalization, quota/overwrite/cleanup invariants and
-no unfinished sessions. Extended failure campaigns remain M1-PR7-R3 work.
+no unfinished sessions. M1-PR7-R3 adds the real transport/resource campaign below.
 
 **Rollout/rollback:** quiesce writers and apply the additive nullable migration
 before updating the service. New code reads both layouts; rollback to old code
@@ -276,6 +276,20 @@ SQL control records or diagnostic output. Omit `--uploads` to disable these rout
 there is no additional migration. F-live requires real SPIRE/HTTPS, PostgreSQL and
 S3 evidence for quota races, scope denials, streaming, manifest staging and abort.
 See [ADR-005](decisions/0005-authorized-streaming-uploads.md).
+
+M1-PR7-R3 makes F-live require a 1-GiB reservation / maximum 4-MiB streaming
+campaign with Linux runtime RSS sampling (growth <64 MiB; absolute <192 MiB;
+kernel virtual peak growth <128 MiB).
+A rejected oversized declaration must stay within the same budget. Real partial
+TLS disconnect, transport-deadline stall, and mid-body grant expiry each start
+with an observed S3 multipart session and must leave no completed staging object,
+unfinished session, SQL part marker or received-byte accounting. A fresh grant
+retries the same index, then explicit abort removes staging and releases the
+reservation. The completion marker and named non-skipped test are both mandatory;
+missing campaign evidence fails the gate. These checks use owned fixture services
+and a directly extended fixture lease, rather than qualifying a renewal API.
+Process-death session lifecycle remains an operator responsibility; finalization
+crash coverage remains M1-PR8 work.
 
 ## M1-PR8 immutable artifact finalization
 

@@ -408,6 +408,9 @@ def check_upload_http(folder: Path, storage_env: dict[str, str], invoke: Invoke)
     env = {
         **os.environ,
         **storage_env,
+        "FABRIC_FIXTURE_S3_CLIENT": require(
+            invoke("ps", "-q", "s3-client"), "S3 client container identity"
+        ).strip(),
         "FABRIC_FIXTURE_PG_SOCKET": str(folder / "postgres-socket"),
         "FABRIC_FIXTURE_PG_CONTAINER": container,
     }
@@ -429,6 +432,7 @@ def check_upload_http(folder: Path, storage_env: dict[str, str], invoke: Invoke)
     test = "test_scoped_streaming_reservation_manifest_and_abort"
     if (
         result.returncode
+        or "UPLOAD_FAILURE_CAMPAIGN_PASSED" not in result.stdout.splitlines()
         or f"{test} (live_uploads.UploadHttpTests.{test}) ... ok" not in result.stderr
         or "Ran 1 test" not in result.stderr
         or not result.stderr.rstrip().endswith("OK")
