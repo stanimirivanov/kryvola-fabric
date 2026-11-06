@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 @contextmanager
-def spire(folder: Path, domain: str = "fabric.test"):
+def spire(folder: Path, domain: str = "fabric.test", ttl: int = 10):
     folder.mkdir()
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
@@ -104,7 +104,7 @@ plugins {{
                 "json",
             )
         )["value"]
-        for name in ("runtime", "worker", "other"):
+        for name in ("runtime", "worker", "other", "long"):
             command(
                 "spire-server",
                 "entry",
@@ -118,7 +118,7 @@ plugins {{
                 "-selector",
                 f"unix:uid:{os.getuid()}",
                 "-x509SVIDTTL",
-                "10",
+                "120" if name == "long" else str(ttl),
             )
         agent = start(
             "spire-agent", "run", "-config", str(folder / "agent.conf"), "-joinToken", token
@@ -146,4 +146,4 @@ plugins {{
                         raise RuntimeError("SPIRE Workload API did not supply identities") from None
                     time.sleep(0.1)
 
-        yield agent_socket, fetch
+        yield agent_socket, fetch, agent

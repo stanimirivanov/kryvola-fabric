@@ -1,6 +1,7 @@
 """Live certificate and policy tests for the Fabric runtime."""
 
 import base64
+import concurrent.futures
 import hashlib
 import http.client
 import json
@@ -25,7 +26,7 @@ class RuntimeAuthorizationTests(unittest.TestCase):
         self.assertTrue(binary.is_file(), "Build fabric-runtime with cargo build --locked first")
         with (
             tempfile.TemporaryDirectory() as directory,
-            spire(Path(directory) / "spire") as (endpoint, fetch),
+            spire(Path(directory) / "spire", ttl=45) as (endpoint, fetch, agent),
         ):
             folder = Path(directory)
 
@@ -117,7 +118,7 @@ class RuntimeAuthorizationTests(unittest.TestCase):
 
                     server_certs = []
 
-                    def post(name, body=request):
+                    def post(name, body=request, *, credential=True, slow=False, send_at=None):
                         tls = ssl.create_default_context(cafile=str(folder / "runtime.ca"))
                         tls.check_hostname = False
                         if name:
@@ -135,16 +136,30 @@ class RuntimeAuthorizationTests(unittest.TestCase):
                                 (("URI", "spiffe://fabric.test/runtime"),),
                             )
                             server_certs.append(conn.sock.getpeercert(binary_form=True))
-                            conn.request(
-                                "POST",
-                                "/v1/artifact-access/authorize",
-                                json.dumps(body),
-                                {
-                                    "Authorization": f"Bearer {token}",
-                                    "X-Workload-Identity": "spiffe://fabric.test/worker",
-                                    "Content-Type": "application/json",
-                                },
-                            )
+                            headers = {
+                                "Content-Type": "application/json",
+                                "X-Workload-Identity": "spiffe://fabric.test/worker",
+                            }
+                            if credential:
+                                headers["Authorization"] = f"Bearer {token}"
+                            if slow:
+                                headers["Content-Length"] = "100"
+                            if send_at is not None:
+                                payload = json.dumps(body).encode()
+                                conn.putrequest("POST", "/v1/artifact-access/authorize")
+                                for key, value in headers.items():
+                                    conn.putheader(key, value)
+                                conn.putheader("Content-Length", str(len(payload)))
+                                conn.endheaders()
+                                time.sleep(max(0, send_at - time.time()))
+                                conn.send(payload)
+                            else:
+                                conn.request(
+                                    "POST",
+                                    "/v1/artifact-access/authorize",
+                                    None if slow else json.dumps(body),
+                                    headers,
+                                )
                             response = conn.getresponse()
                             return response.status, response.read()
                         finally:
@@ -162,6 +177,13 @@ class RuntimeAuthorizationTests(unittest.TestCase):
                         )
                     ):
                         post(None)
+                    self.assertEqual(post("worker", credential=False)[0], 403)
+                    saved = token
+                    token = "malformed-secret-credential"
+                    self.assertEqual(post("worker")[0], 403)
+                    token = saved
+                    self.assertEqual(post("worker", {"secret": "x" * 65536})[0], 413)
+                    self.assertEqual(post("worker", slow=True)[0], 408)
                     self.assertEqual(post("other")[0], 403)
                     for field, value in {
                         "tenant_scope": "tenant-b",
@@ -176,6 +198,8 @@ class RuntimeAuthorizationTests(unittest.TestCase):
                         post("worker", {**request, "purpose": "EVIDENCE_READ"})[0], 403
                     )
                     self.assertEqual(post("worker", {**request, "secret": token})[0], 400)
+                    publish("worker", time.time_ns() // 1_000_000 + 61_000)
+                    self.assertEqual(post("worker")[0], 403)
                     publish("worker", 1)
                     self.assertEqual(post("worker")[0], 403)
                     publish("worker", expires, epoch="0" * 64)
@@ -222,7 +246,7 @@ class RuntimeAuthorizationTests(unittest.TestCase):
                             )
                         ):
                             post("forged")
-                    with spire(folder / "foreign", "foreign.test") as (_, foreign_fetch):
+                    with spire(folder / "foreign", "foreign.test") as (_, foreign_fetch, _):
                         foreign = foreign_fetch()["svids"][0]
                         for field, suffix, label in (
                             ("x509_svid", "pem", "CERTIFICATE"),
@@ -254,6 +278,11 @@ class RuntimeAuthorizationTests(unittest.TestCase):
                     )
                     self.assertEqual(post("worker")[0], 403)
 
+                    token = "9" * 64
+                    publish("worker", time.time_ns() // 1_000_000 + 45_000)
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+                        results = list(pool.map(post, ("worker", "worker")))
+                    self.assertEqual(sorted(status for status, _ in results), [200, 403])
                     old_server = server_certs[-1]
                     old = (folder / "worker.pem").read_text()
                     (folder / "expired.pem").write_text(old)
@@ -261,7 +290,7 @@ class RuntimeAuthorizationTests(unittest.TestCase):
                     token = "c" * 64
                     expires = time.time_ns() // 1_000_000 + 45_000
                     publish("worker", expires)
-                    deadline = time.monotonic() + 30
+                    deadline = time.monotonic() + 60
                     while (folder / "worker.pem").read_text() == old:
                         self.assertLess(time.monotonic(), deadline, "SPIRE did not rotate the SVID")
                         time.sleep(0.5)
@@ -274,13 +303,13 @@ class RuntimeAuthorizationTests(unittest.TestCase):
                         time.sleep(0.1)
                         self.assertEqual(post("worker")[0], 403)  # Already consumed token.
 
-                    not_after = (
-                        subprocess.run(
+                    def cert_expiry(name):
+                        result = subprocess.run(
                             [
                                 "openssl",
                                 "x509",
                                 "-in",
-                                str(folder / "expired.pem"),
+                                str(folder / f"{name}.pem"),
                                 "-noout",
                                 "-enddate",
                             ],
@@ -289,10 +318,15 @@ class RuntimeAuthorizationTests(unittest.TestCase):
                             text=True,
                             timeout=5,
                         )
-                        .stdout.strip()
-                        .split("=", 1)[1]
-                    )
-                    expiry = ssl.cert_time_to_seconds(not_after)
+                        return ssl.cert_time_to_seconds(result.stdout.strip().split("=", 1)[1])
+
+                    expiry = cert_expiry("expired")
+                    token = "8" * 64
+                    publish("worker", time.time_ns() // 1_000_000 + 45_000)
+                    while time.time() < expiry - 0.8:
+                        self.assertLess(time.monotonic(), deadline)
+                        time.sleep(0.1)
+                    self.assertEqual(post("expired", send_at=expiry + 0.1)[0], 403)
                     while time.time() <= expiry + 1:
                         self.assertLess(time.monotonic(), deadline, "old SVID did not expire")
                         time.sleep(0.2)
@@ -312,11 +346,67 @@ class RuntimeAuthorizationTests(unittest.TestCase):
                     self.assertEqual(post("worker")[0], 403)
                     publish("worker", expires)
                     self.assertEqual(post("worker")[0], 200)
+                    token = "e" * 64
+                    publish("long", time.time_ns() // 1_000_000 + 45_000)
+                    with self.assertRaises(
+                        (
+                            ssl.SSLError,
+                            http.client.RemoteDisconnected,
+                            BrokenPipeError,
+                            ConnectionResetError,
+                        )
+                    ):
+                        post("long")
+                    deadline = time.monotonic() + 60
+                    while cert_expiry("worker") - time.time() < 22:
+                        self.assertLess(time.monotonic(), deadline)
+                        time.sleep(0.2)
+                        credentials()
+                    agent.terminate()
+                    agent.wait(timeout=5)
+                    token = "f" * 64
+                    publish("worker", time.time_ns() // 1_000_000 + 45_000)
+                    self.assertEqual(post("worker")[0], 200)
+                    time.sleep(16)
+                    self.assertGreater(cert_expiry("worker"), time.time())
+                    with self.assertRaises(
+                        (
+                            ssl.SSLError,
+                            http.client.RemoteDisconnected,
+                            BrokenPipeError,
+                            ConnectionResetError,
+                        )
+                    ):
+                        post("worker")
                 finally:
                     process.terminate()
                     _, audit = process.communicate(timeout=5)
-            self.assertIn("runtime_auth_denied", audit)
-            for sensitive in ("tenant-a", "a" * 64, "b" * 64, "c" * 64, "d" * 64):
+            reasons = {line.removeprefix("runtime_auth_denied ") for line in audit.splitlines()}
+            self.assertTrue(
+                {
+                    "credential",
+                    "policy",
+                    "expiry",
+                    "replay",
+                    "invalid_scope",
+                    "body",
+                    "deadline",
+                    "handshake",
+                    "identity",
+                    "provider",
+                }
+                <= reasons,
+                reasons,
+            )
+            self.assertTrue(
+                all(line.startswith("runtime_auth_denied ") for line in audit.splitlines())
+            )
+            for sensitive in (
+                "tenant-a",
+                "fabric.test",
+                "malformed-secret-credential",
+                *[c * 64 for c in "abcdef98"],
+            ):
                 self.assertNotIn(sensitive, audit)
 
     def test_no_legacy_or_unavailable_provider_fallback(self):

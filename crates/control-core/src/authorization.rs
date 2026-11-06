@@ -1,7 +1,7 @@
 //! Local operator policy for SPIFFE-ID-bound, one-use artifact grants.
 
 use std::{
-    collections::HashSet,
+    collections::HashMap,
     fs::File,
     io::Read,
     path::PathBuf,
@@ -109,7 +109,7 @@ impl UploadPermit {
     }
 }
 
-fn now_unix_ms() -> Option<u64> {
+pub fn now_unix_ms() -> Option<u64> {
     u64::try_from(
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -122,7 +122,7 @@ fn now_unix_ms() -> Option<u64> {
 pub struct Authorizer {
     path: PathBuf,
     boot_id: String,
-    redeemed: Mutex<HashSet<String>>,
+    redeemed: Mutex<ReplayWindow>,
 }
 
 pub fn sha256_hex(der: &[u8]) -> String {
@@ -138,7 +138,7 @@ impl Authorizer {
         Ok(Self {
             path,
             boot_id: hex::encode(boot),
-            redeemed: Mutex::new(HashSet::new()),
+            redeemed: Mutex::new(ReplayWindow::default()),
         })
     }
 
@@ -153,6 +153,7 @@ impl Authorizer {
         scope: &Scope,
     ) -> Option<UploadPermit> {
         if scope.purpose != Purpose::ComputeWrite {
+            Denial::Policy.audit();
             return None;
         }
         let expires = self.redeem(workload, token, scope)?;
@@ -165,54 +166,188 @@ impl Authorizer {
     }
 
     pub fn redeem(&self, workload: &SpiffeId, token: &str, scope: &Scope) -> Option<u64> {
+        self.try_redeem(workload, token, scope)
+            .map_err(Denial::audit)
+            .ok()
+    }
+
+    fn try_redeem(&self, workload: &SpiffeId, token: &str, scope: &Scope) -> Result<u64, Denial> {
         if !lowercase_digest(token) {
-            return None;
+            return Err(Denial::Credential);
         }
-        // Serialize the fresh policy read with one-use redemption. No policy cache.
-        let mut redeemed = self.redeemed.lock().ok()?;
+        // Serialize policy reads and replay consumption; never evict an unexpired token.
+        let mut redeemed = self.redeemed.lock().map_err(|_| Denial::Policy)?;
         let token = sha256_hex(token.as_bytes());
-        if redeemed.len() >= MAX_REDEEMED || redeemed.contains(&token) {
-            return None;
-        }
-        if !self.path.metadata().ok()?.is_file() {
-            return None;
+        if !self.path.metadata().map_err(|_| Denial::Policy)?.is_file() {
+            return Err(Denial::Policy);
         }
         let mut bytes = Vec::new();
         File::open(&self.path)
-            .ok()?
+            .map_err(|_| Denial::Policy)?
             .take(POLICY_BYTES + 1)
             .read_to_end(&mut bytes)
-            .ok()?;
+            .map_err(|_| Denial::Policy)?;
         if bytes.len() as u64 > POLICY_BYTES {
-            return None;
+            return Err(Denial::Policy);
         }
-        let policy: Policy = serde_json::from_slice(&bytes).ok()?;
+        let policy: Policy = serde_json::from_slice(&bytes).map_err(|_| Denial::Policy)?;
         if policy.boot_id != self.boot_id || policy.grants.len() > MAX_GRANTS {
-            return None;
+            return Err(Denial::Policy);
         }
         let mut matching = policy
             .grants
             .into_iter()
             .filter(|grant| grant.token_sha256 == token);
-        let grant = matching.next()?;
+        let grant = matching.next().ok_or(Denial::Policy)?;
         if matching.next().is_some()
             || grant.spiffe_id != workload.to_string()
             || grant.scope != *scope
         {
-            return None;
+            return Err(Denial::Policy);
         }
-        let now = u64::try_from(
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .ok()?
-                .as_millis(),
-        )
-        .ok()?;
-        let remaining = grant.expires_unix_ms.checked_sub(now)?;
-        if !(1..=MAX_TTL_MS).contains(&remaining) {
-            return None;
+        let now = now_unix_ms().ok_or(Denial::Clock)?;
+        if !grant_live(grant.expires_unix_ms, now) {
+            return Err(Denial::Expiry);
         }
-        redeemed.insert(token);
-        Some(grant.expires_unix_ms)
+        redeemed.consume(token, grant.expires_unix_ms, now)?;
+        Ok(grant.expires_unix_ms)
+    }
+}
+
+/// Fixed audit vocabulary; no identity, credential, scope, or parser error is logged.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum Denial {
+    Credential,
+    Policy,
+    Expiry,
+    Replay,
+    Capacity,
+    Clock,
+    Scope,
+    Body,
+    Deadline,
+    Handshake,
+    Identity,
+    Provider,
+}
+
+impl Denial {
+    pub fn audit(self) {
+        eprintln!("runtime_auth_denied {}", self.code());
+    }
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::Credential => "credential",
+            Self::Policy => "policy",
+            Self::Expiry => "expiry",
+            Self::Replay => "replay",
+            Self::Capacity => "capacity",
+            Self::Clock => "clock",
+            Self::Scope => "invalid_scope",
+            Self::Body => "body",
+            Self::Deadline => "deadline",
+            Self::Handshake => "handshake",
+            Self::Identity => "identity",
+            Self::Provider => "provider",
+        }
+    }
+}
+
+fn grant_live(expiry: u64, now: u64) -> bool {
+    expiry
+        .checked_sub(now)
+        .is_some_and(|remaining| (1..=MAX_TTL_MS).contains(&remaining))
+}
+
+#[derive(Default)]
+struct ReplayWindow {
+    entries: HashMap<String, u64>,
+    high_water: u64,
+}
+
+impl ReplayWindow {
+    fn consume(&mut self, hash: String, expiry: u64, now: u64) -> Result<(), Denial> {
+        if now < self.high_water {
+            return Err(Denial::Clock);
+        }
+        self.high_water = now;
+        self.entries.retain(|_, expires| *expires > now);
+        if self.entries.contains_key(&hash) {
+            return Err(Denial::Replay);
+        }
+        if self.entries.len() >= MAX_REDEEMED {
+            return Err(Denial::Capacity);
+        }
+        self.entries.insert(hash, expiry);
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn replay_window_recovers_capacity_without_evicting_live_tokens() {
+        let mut window = ReplayWindow::default();
+        for n in 0..MAX_REDEEMED {
+            assert!(window.consume(n.to_string(), 20, 10).is_ok());
+        }
+        assert_eq!(
+            window.consume("extra".into(), 30, 10),
+            Err(Denial::Capacity)
+        );
+        assert_eq!(window.consume("0".into(), 30, 19), Err(Denial::Replay));
+        assert!(window.consume("fresh".into(), 40, 20).is_ok());
+        assert_eq!(window.consume("fresh".into(), 50, 21), Err(Denial::Replay));
+        assert_eq!(
+            window.consume("rollback".into(), 30, 19),
+            Err(Denial::Clock)
+        );
+        assert!(window.entries.len() <= MAX_REDEEMED);
+    }
+
+    #[test]
+    fn grant_lifetime_is_positive_and_bounded_including_overflow() {
+        assert!(!grant_live(10, 10));
+        assert!(!grant_live(9, 10));
+        assert!(grant_live(60_010, 10));
+        assert!(!grant_live(60_011, 10));
+        assert!(!grant_live(0, u64::MAX));
+    }
+    #[test]
+    fn expired_redemptions_do_not_create_a_lifetime_cutoff() {
+        struct Cleanup(PathBuf);
+        impl Drop for Cleanup {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_file(&self.0);
+            }
+        }
+        let mut auth = Authorizer::new(PathBuf::new()).unwrap();
+        auth.path = std::env::temp_dir().join(format!("fabric-replay-{}.json", auth.boot_id()));
+        let _cleanup = Cleanup(auth.path.clone());
+        let workload: SpiffeId = "spiffe://fabric.test/worker".parse().unwrap();
+        let scope = Scope::decode(br#"{"schema_version":"1","attempt":{"schema_version":"1","tenant_scope":"tenant","operation_id":"op","workflow_epoch":"1","attempt_epoch":"1","fence":"1"},"manifest_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","purpose":"COMPUTE_READ"}"#).unwrap();
+        for n in 0..=MAX_REDEEMED {
+            if n == MAX_REDEEMED {
+                std::thread::sleep(std::time::Duration::from_millis(1100));
+            }
+            let token = sha256_hex(&n.to_le_bytes());
+            let expiry = now_unix_ms().unwrap() + 1000;
+            std::fs::write(
+                &auth.path,
+                serde_json::json!({"boot_id":auth.boot_id(), "grants":[{
+                    "spiffe_id":workload.to_string(), "token_sha256":sha256_hex(token.as_bytes()),
+                    "scope":scope, "expires_unix_ms":expiry
+                }]})
+                .to_string(),
+            )
+            .unwrap();
+            assert_eq!(
+                auth.redeem(&workload, &token, &scope),
+                Some(expiry),
+                "expired redemptions must not cause a lifetime cutoff"
+            );
+        }
     }
 }
