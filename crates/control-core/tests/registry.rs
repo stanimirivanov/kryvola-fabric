@@ -195,16 +195,19 @@ async fn bounded_uploads() {
         .as_millis() as u64;
     let permit = |n: u8, certificate: &str| {
         let token = hex::encode([n; 32]);
+        let workload: spiffe::SpiffeId = format!("spiffe://fabric.test/{certificate}")
+            .parse()
+            .unwrap();
         std::fs::write(
             &path,
             json!({"boot_id":auth.boot_id(),"grants":[{
-                "certificate_sha256":certificate,"token_sha256":sha256_hex(token.as_bytes()),
+                "spiffe_id":workload.to_string(),"token_sha256":sha256_hex(token.as_bytes()),
                 "scope":scope_json,"expires_unix_ms":SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64+55_000
             }]})
             .to_string(),
         )
         .unwrap();
-        auth.redeem_upload(certificate, &token, &scope).unwrap()
+        auth.redeem_upload(&workload, &token, &scope).unwrap()
     };
 
     let objects: Arc<dyn ObjectStore> = Arc::new(

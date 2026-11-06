@@ -59,6 +59,27 @@ class RuntimeFixtureTests(unittest.TestCase):
             self.assertEqual(start[:-4], cleanup[:-3])
             self.assertEqual(cleanup[-3:], ("down", "--volumes", "--remove-orphans"))
 
+    def test_workload_auth_failure_cleans_fixture_before_database_probes(self):
+        calls = []
+
+        def docker(*args, **kwargs):
+            calls.append(args)
+            output = "unix:///var/run/docker.sock\n" if args[0] == "context" else ""
+            return subprocess.CompletedProcess(args, 0, output)
+
+        with (
+            tempfile.TemporaryDirectory() as folder,
+            patch.object(runtime, "docker", docker),
+            patch.object(runtime, "check_runtime"),
+            patch.object(runtime, "check_workload_auth", side_effect=RuntimeError("SPIRE failed")),
+            patch.object(runtime, "check_postgres") as database,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "SPIRE failed"):
+                runtime.run(Path(folder))
+        database.assert_not_called()
+        self.assertEqual(calls[-2][:-4], calls[-1][:-3])
+        self.assertEqual(calls[-1][-3:], ("down", "--volumes", "--remove-orphans"))
+
     def test_remote_docker_is_rejected_before_provisioning(self):
         with (
             tempfile.TemporaryDirectory() as folder,
@@ -113,6 +134,30 @@ class RuntimeFixtureTests(unittest.TestCase):
             ],
         ):
             runtime.check_runtime()
+
+    def test_auth_probe_rejects_failure_and_skips_without_leaking_assertion_values(self):
+        success = subprocess.CompletedProcess([], 0, "", "")
+        for code, stderr in (
+            (
+                1,
+                "ERROR: test_identity (live_runtime_auth.Tests)\n"
+                '  File "tests/live_runtime_auth.py", line 1, in test_identity\n'
+                "AssertionError: secret-token",
+            ),
+            (0, "Ran 2 tests\nOK (skipped=2)"),
+            (0, "Ran 0 tests\nOK"),
+        ):
+            with patch.object(
+                runtime,
+                "_runtime_command",
+                side_effect=[
+                    success,
+                    subprocess.CompletedProcess([], code, "secret-token", stderr),
+                ],
+            ):
+                with self.assertRaisesRegex(RuntimeError, "SPIRE workload") as failure:
+                    runtime.check_workload_auth()
+                self.assertNotIn("secret-token", str(failure.exception))
 
     def test_owned_runtime_command_returns_output_and_rejects_missing_tools(self):
         result = runtime._runtime_command([sys.executable, "-c", "print('ready')"], 5)

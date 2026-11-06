@@ -1,4 +1,4 @@
-//! Local operator policy for certificate-bound, one-use artifact grants.
+//! Local operator policy for SPIFFE-ID-bound, one-use artifact grants.
 
 use std::{
     collections::HashSet,
@@ -11,6 +11,7 @@ use std::{
 
 use ring::{digest, rand::SecureRandom};
 use serde::{Deserialize, Serialize};
+use spiffe::SpiffeId;
 
 const POLICY_BYTES: u64 = 256 * 1024;
 const MAX_GRANTS: usize = 256;
@@ -88,7 +89,7 @@ struct Policy {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Grant {
-    certificate_sha256: String,
+    spiffe_id: String,
     token_sha256: String,
     scope: Scope,
     expires_unix_ms: u64,
@@ -147,23 +148,23 @@ impl Authorizer {
 
     pub fn redeem_upload(
         &self,
-        certificate: &str,
+        workload: &SpiffeId,
         token: &str,
         scope: &Scope,
     ) -> Option<UploadPermit> {
         if scope.purpose != Purpose::ComputeWrite {
             return None;
         }
-        let expires = self.redeem(certificate, token, scope)?;
+        let expires = self.redeem(workload, token, scope)?;
         Some(UploadPermit {
             tenant: scope.attempt.tenant_scope.clone(),
-            certificate: certificate.to_owned(),
+            certificate: workload.to_string(),
             scope: serde_json::to_value(scope).ok()?,
             expires,
         })
     }
 
-    pub fn redeem(&self, certificate: &str, token: &str, scope: &Scope) -> Option<u64> {
+    pub fn redeem(&self, workload: &SpiffeId, token: &str, scope: &Scope) -> Option<u64> {
         if !lowercase_digest(token) {
             return None;
         }
@@ -195,7 +196,7 @@ impl Authorizer {
             .filter(|grant| grant.token_sha256 == token);
         let grant = matching.next()?;
         if matching.next().is_some()
-            || grant.certificate_sha256 != certificate
+            || grant.spiffe_id != workload.to_string()
             || grant.scope != *scope
         {
             return None;
