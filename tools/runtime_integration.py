@@ -426,12 +426,28 @@ def check_upload_http(folder: Path, storage_env: dict[str, str], invoke: Invoke)
             "live_uploads.py",
             "-v",
         ],
-        90,
+        180,
         env=env,
     )
     test = "test_scoped_streaming_reservation_manifest_and_abort"
+    boundaries = (
+        "fresh-race",
+        "before",
+        "after",
+        "unavailable",
+        "lost_ack",
+        "before_insert",
+        "after_insert",
+        "commit",
+        "db_disconnect",
+        "response_lost",
+        "conflicting_copy",
+    )
+    boundary_proof = [f"Finalization boundary passed: {boundary}" for boundary in boundaries]
     if (
         result.returncode
+        or any(line not in result.stdout.splitlines() for line in boundary_proof)
+        or "FINALIZATION_RECOVERY_PASSED" not in result.stdout.splitlines()
         or "VERIFIED_FINALIZATION_HTTP_PASSED" not in result.stdout.splitlines()
         or "UPLOAD_FAILURE_CAMPAIGN_PASSED" not in result.stdout.splitlines()
         or f"{test} (live_uploads.UploadHttpTests.{test}) ... ok" not in result.stderr
@@ -444,6 +460,9 @@ def check_upload_http(folder: Path, storage_env: dict[str, str], invoke: Invoke)
             if line.startswith(("FAIL: ", "ERROR: ", '  File "'))
         ]
         raise RuntimeError("Upload HTTP probe failed or did not run\n" + "\n".join(frames))
+
+    for line in boundary_proof:
+        print(line, flush=True)
 
 
 def run(folder: Path) -> None:
