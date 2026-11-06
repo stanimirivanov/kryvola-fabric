@@ -84,6 +84,8 @@ impl Scope {
 struct Policy {
     boot_id: String,
     grants: Vec<Grant>,
+    #[serde(default)]
+    registry_grants: Vec<RegistryGrant>,
 }
 
 #[derive(Deserialize)]
@@ -92,6 +94,32 @@ struct Grant {
     spiffe_id: String,
     token_sha256: String,
     scope: Scope,
+    expires_unix_ms: u64,
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct RegistryScope {
+    pub tenant_scope: String,
+    pub operation_id: String,
+    pub workflow_epoch: String,
+}
+
+#[derive(Deserialize, PartialEq, Eq, Clone, Copy)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum RegistryAction {
+    CreateOperation,
+    GetOperation,
+    EnsureAttempt,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RegistryGrant {
+    spiffe_id: String,
+    token_sha256: String,
+    scope: RegistryScope,
+    actions: Vec<RegistryAction>,
     expires_unix_ms: u64,
 }
 
@@ -178,22 +206,7 @@ impl Authorizer {
         // Serialize policy reads and replay consumption; never evict an unexpired token.
         let mut redeemed = self.redeemed.lock().map_err(|_| Denial::Policy)?;
         let token = sha256_hex(token.as_bytes());
-        if !self.path.metadata().map_err(|_| Denial::Policy)?.is_file() {
-            return Err(Denial::Policy);
-        }
-        let mut bytes = Vec::new();
-        File::open(&self.path)
-            .map_err(|_| Denial::Policy)?
-            .take(POLICY_BYTES + 1)
-            .read_to_end(&mut bytes)
-            .map_err(|_| Denial::Policy)?;
-        if bytes.len() as u64 > POLICY_BYTES {
-            return Err(Denial::Policy);
-        }
-        let policy: Policy = serde_json::from_slice(&bytes).map_err(|_| Denial::Policy)?;
-        if policy.boot_id != self.boot_id || policy.grants.len() > MAX_GRANTS {
-            return Err(Denial::Policy);
-        }
+        let policy = self.read_policy()?;
         let mut matching = policy
             .grants
             .into_iter()
@@ -211,6 +224,69 @@ impl Authorizer {
         }
         redeemed.consume(token, grant.expires_unix_ms, now)?;
         Ok(grant.expires_unix_ms)
+    }
+    fn read_policy(&self) -> Result<Policy, Denial> {
+        if !self.path.metadata().map_err(|_| Denial::Policy)?.is_file() {
+            return Err(Denial::Policy);
+        }
+        let mut bytes = Vec::new();
+        File::open(&self.path)
+            .map_err(|_| Denial::Policy)?
+            .take(POLICY_BYTES + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|_| Denial::Policy)?;
+        if bytes.len() as u64 > POLICY_BYTES {
+            return Err(Denial::Policy);
+        }
+        let policy: Policy = serde_json::from_slice(&bytes).map_err(|_| Denial::Policy)?;
+        if policy.boot_id != self.boot_id
+            || policy.grants.len() + policy.registry_grants.len() > MAX_GRANTS
+        {
+            return Err(Denial::Policy);
+        }
+        Ok(policy)
+    }
+
+    /// Reusable coordinator capability; separate from one-use artifact grants.
+    pub fn registry_scope(
+        &self,
+        workload: &SpiffeId,
+        token: &str,
+        action: RegistryAction,
+    ) -> Option<RegistryScope> {
+        let result = (|| {
+            if !lowercase_digest(token) {
+                return Err(Denial::Credential);
+            }
+            let hash = sha256_hex(token.as_bytes());
+            let mut matching = self
+                .read_policy()?
+                .registry_grants
+                .into_iter()
+                .filter(|grant| grant.token_sha256 == hash);
+            let grant = matching.next().ok_or(Denial::Policy)?;
+            if matching.next().is_some()
+                || grant.spiffe_id != workload.to_string()
+                || grant.actions.len() > 3
+                || !grant.actions.contains(&action)
+                || !identifier(&grant.scope.tenant_scope)
+                || !identifier(&grant.scope.operation_id)
+                || !decimal(&grant.scope.workflow_epoch)
+            {
+                return Err(Denial::Policy);
+            }
+            let now = {
+                let mut window = self.redeemed.lock().map_err(|_| Denial::Policy)?;
+                let now = now_unix_ms().ok_or(Denial::Clock)?;
+                window.observe(now)?;
+                now
+            };
+            if !grant_live(grant.expires_unix_ms, now) {
+                return Err(Denial::Expiry);
+            }
+            Ok(grant.scope)
+        })();
+        result.map_err(Denial::audit).ok()
     }
 }
 
@@ -266,11 +342,16 @@ struct ReplayWindow {
 }
 
 impl ReplayWindow {
-    fn consume(&mut self, hash: String, expiry: u64, now: u64) -> Result<(), Denial> {
+    fn observe(&mut self, now: u64) -> Result<(), Denial> {
         if now < self.high_water {
             return Err(Denial::Clock);
         }
         self.high_water = now;
+        Ok(())
+    }
+
+    fn consume(&mut self, hash: String, expiry: u64, now: u64) -> Result<(), Denial> {
+        self.observe(now)?;
         self.entries.retain(|_, expires| *expires > now);
         if self.entries.contains_key(&hash) {
             return Err(Denial::Replay);

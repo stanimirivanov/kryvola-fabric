@@ -18,6 +18,7 @@ use hyper_util::rt::{TokioIo, TokioTimer};
 use kryvola_fabric_core::{
     authorization::{Authorizer, Denial, Scope, now_unix_ms},
     limits::CONTROL_BYTES,
+    registry_http::RegistryApi,
     runtime_contract::{RuntimeCode, RuntimeValidator},
     workload::{Lease, PROVIDER_REFRESH, PROVIDER_TTL, identity_expiry},
 };
@@ -51,14 +52,21 @@ fn deny(reason: Denial) -> Response {
     reply(StatusCode::FORBIDDEN, RuntimeCode::Forbidden.body())
 }
 
+fn bearer(headers: &axum::http::HeaderMap) -> Option<&str> {
+    let mut values = headers.get_all(header::AUTHORIZATION).iter();
+    let token = values.next()?.to_str().ok()?.strip_prefix("Bearer ")?;
+    values.next().is_none().then_some(token)
+}
+
 async fn boundary(State(runtime): State<Arc<RuntimeValidator>>, request: Request) -> Response {
-    handle(request, None, &runtime).await
+    handle(request, None, &runtime, None).await
 }
 
 async fn handle(
     request: Request,
     peer: Option<(&SpiffeId, &Authorizer, u64, Instant)>,
     runtime: &RuntimeValidator,
+    registry: Option<&RegistryApi>,
 ) -> Response {
     let authorize =
         request.method() == Method::POST && request.uri() == "/v1/artifact-access/authorize";
@@ -82,6 +90,40 @@ async fn handle(
         }
         Ok(Err(_)) => reject_body(),
         Ok(Ok(bytes)) if health && bytes.is_empty() => reply(StatusCode::OK, r#"{"status":"ok"}"#),
+        Ok(Ok(bytes))
+            if peer.is_some()
+                && registry.is_some()
+                && RegistryApi::matches(&headers.method, headers.uri.path()) =>
+        {
+            let (workload, auth, expiry, deadline) = peer.expect("peer guard");
+            if Instant::now() >= deadline {
+                return deny(Denial::Provider);
+            }
+            if !now_unix_ms().is_some_and(|now| now < expiry) {
+                return deny(Denial::Identity);
+            }
+            if headers.uri.query().is_some() {
+                Denial::Scope.audit();
+                return reply(StatusCode::BAD_REQUEST, RuntimeCode::InvalidRequest.body());
+            }
+            let (status, body) = registry
+                .expect("registry guard")
+                .handle(
+                    &headers.method,
+                    headers.uri.path(),
+                    &bytes,
+                    (workload, auth, bearer(&headers.headers)),
+                    runtime,
+                )
+                .await;
+            if Instant::now() >= deadline {
+                return deny(Denial::Provider);
+            }
+            if !now_unix_ms().is_some_and(|now| now < expiry) {
+                return deny(Denial::Identity);
+            }
+            reply(status, body)
+        }
         Ok(Ok(bytes)) if authorize && peer.is_some() => {
             let Some((workload, authorizer, identity_expiry, provider_deadline)) = peer else {
                 unreachable!()
@@ -92,12 +134,7 @@ async fn handle(
             if !now_unix_ms().is_some_and(|now| now < identity_expiry) {
                 return deny(Denial::Identity);
             }
-            let mut values = headers.headers.get_all(header::AUTHORIZATION).iter();
-            let token = values
-                .next()
-                .and_then(|value| value.to_str().ok())
-                .and_then(|value| value.strip_prefix("Bearer "));
-            let Some(token) = token.filter(|_| values.next().is_none()) else {
+            let Some(token) = bearer(&headers.headers) else {
                 return deny(Denial::Credential);
             };
             let scope = runtime
@@ -192,12 +229,13 @@ async fn workload_tls(endpoint: &str, identity: &str) -> Result<TlsAcceptor, Box
 async fn serve_mtls(
     listener: TcpListener,
     initial: TlsAcceptor,
-    endpoint: String,
-    identity: String,
+    workload: (String, String),
     refreshed: Instant,
     auth: Arc<Authorizer>,
     runtime: Arc<RuntimeValidator>,
+    registry: Option<Arc<RegistryApi>>,
 ) -> std::io::Result<()> {
+    let (endpoint, identity) = workload;
     let leases = Arc::new(RwLock::new(Lease {
         value: initial,
         refreshed,
@@ -240,6 +278,7 @@ async fn serve_mtls(
         let provider_deadline = lease.refreshed + PROVIDER_TTL;
         let auth = auth.clone();
         let runtime = runtime.clone();
+        let registry = registry.clone();
         tokio::spawn(async move {
             let _slot = slot;
             let Ok(Ok((stream, identity))) =
@@ -268,6 +307,7 @@ async fn serve_mtls(
                         request.map(axum::body::Body::new),
                         Some((peer, &auth, expiry, provider_deadline)),
                         &runtime,
+                        registry.as_deref(),
                     )
                     .await,
                 )
@@ -300,7 +340,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
             )
             .await?;
         }
-        [mode, endpoint, identity, policy] if mode == "--spiffe" => {
+        [mode, endpoint, identity, policy, remaining @ ..] if mode == "--spiffe" => {
+            let registry = match remaining {
+                [] => None,
+                [flag, path] if flag == "--registry" => {
+                    Some(Arc::new(RegistryApi::connect(path).await?))
+                }
+                _ => return Err("invalid registry configuration arguments".into()),
+            };
             let refreshed = Instant::now();
             let acceptor = workload_tls(endpoint, identity).await.map_err(|_| {
                 Denial::Provider.audit();
@@ -311,17 +358,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
             serve_mtls(
                 listener,
                 acceptor,
-                endpoint.clone(),
-                identity.clone(),
+                (endpoint.clone(), identity.clone()),
                 refreshed,
                 auth,
                 runtime,
+                registry,
             )
             .await?;
         }
         _ => {
             return Err(
-                "usage: fabric-runtime [--spiffe WORKLOAD_API_ENDPOINT SERVER_SPIFFE_ID POLICY]"
+                "usage: fabric-runtime [--spiffe WORKLOAD_API_ENDPOINT SERVER_SPIFFE_ID POLICY [--registry DATABASE_URL_FILE]]"
                     .into(),
             );
         }

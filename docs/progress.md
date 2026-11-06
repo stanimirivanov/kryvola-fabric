@@ -166,9 +166,43 @@ reliable database clock for lease deadlines.
 
 The live gate checks the Rust registry over a Unix socket in its private fixture
 directory. It restarts PostgreSQL and checks persisted state from a new process.
-The registry is an internal API for authorized coordinator callers. The HTTP
-shell still denies operation routes until an authenticated caller is wired in.
-Selection, cancellation and release are separate slices.
+M1-PR6-R1 wires `POST /v1/operations`, `GET /v1/operations/{operation_id}` and
+`POST /v1/attempts/ensure` through the SPIFFE runtime. Add
+`--registry DATABASE_URL_FILE` after the existing `--spiffe` arguments to opt in.
+The private UTF-8 file contains a PostgreSQL URL of at most 4,096 bytes; grant
+read access only to the service. Startup connects with at most eight sessions,
+sets two-second statement/acquisition and one-second lock budgets, and applies
+the existing additive migrations before printing readiness. Startup errors are
+fixed strings; URLs, SQL errors and credentials never enter HTTP bodies or logs.
+Without the flag, operation/attempt routes remain disabled. Plaintext mode cannot
+enable registry access.
+
+The policy may add `registry_grants` alongside `grants` (at most 256 combined).
+Each has `spiffe_id`, `token_sha256`, `expires_unix_ms`, `scope` containing exact
+`tenant_scope`, `operation_id`, `workflow_epoch` strings, and `actions` selected
+from `CREATE_OPERATION`, `GET_OPERATION`, `ENSURE_ATTEMPT`. These coordinator
+capabilities are reusable until expiry (maximum 60 seconds) so identical retries
+can reach the idempotent registry. Artifact grants remain one-use and cannot
+substitute for coordinator authorization. Both kinds require the current boot ID,
+verified workload, fresh policy and monotonic observed wall time. No wildcard
+scope or tenant header supplies authority. Read derives tenant from the grant;
+create/ensure must match the same scope in their validated body.
+
+Requests/responses use the pinned Spec schemas. Ensure returns an existing live
+lease unchanged; there is no invented HTTP renewal route or caller-assigned fence.
+The public status projects existing selection, cancellation and deadline state;
+it confers no disclosure permission. Conflict/expiry/unavailable responses expose
+only canonical Spec codes. F-live races identical and fresh conflicting HTTP
+creates, verifies expiry, rejects cross-tenant/workflow/action/credential swaps,
+stops/restarts PostgreSQL, and restarts the runtime while preserving the current
+successor's exact lease. SQL restart tests persist exact expected epoch/fence/expiry
+between processes and verify the next successor advances monotonically.
+
+**Compatibility:** old policy files remain valid in the new binary. On code
+rollback remove `registry_grants` from the policy (old binaries reject unknown
+fields) and drop the new CLI flag, preserving all operation history. Rotate/reissue
+boot-bound grants after restart. Selection, cancellation and release handlers remain
+separate slices. See [the runtime boundary decision](decisions/0003-registry-http.md).
 
 ## M1-PR7 bounded artifact staging
 

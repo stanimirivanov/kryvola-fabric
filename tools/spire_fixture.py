@@ -104,7 +104,7 @@ plugins {{
                 "json",
             )
         )["value"]
-        for name in ("runtime", "worker", "other", "long"):
+        for name in ("runtime", "worker", "other", "long", "coordinator"):
             command(
                 "spire-server",
                 "entry",

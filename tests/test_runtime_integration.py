@@ -159,6 +159,34 @@ class RuntimeFixtureTests(unittest.TestCase):
                     runtime.check_workload_auth()
                 self.assertNotIn("secret-token", str(failure.exception))
 
+    def test_registry_http_gate_rejects_missing_unrelated_or_skipped_proof(self):
+        test = "test_authenticated_durable_operation_and_attempt_routes"
+        valid = f"{test} (live_registry.RegistryHttpTests.{test}) ... ok\nRan 1 test\nOK"
+        for code, output in (
+            (0, "Ran 0 tests\nOK"),
+            (0, "Ran 1 test\nOK"),
+            (0, valid.replace("OK", "OK (skipped=1)")),
+            (1, "AssertionError: secret-credential"),
+        ):
+            with patch.object(
+                runtime,
+                "_runtime_command",
+                return_value=subprocess.CompletedProcess([], code, "", output),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "Registry HTTP") as failed:
+                    runtime.check_registry_http(
+                        Path("/fixture"),
+                        lambda *args: subprocess.CompletedProcess([], 0, "owned-container", ""),
+                    )
+                self.assertNotIn("secret-credential", str(failed.exception))
+        with patch.object(
+            runtime, "_runtime_command", return_value=subprocess.CompletedProcess([], 0, "", valid)
+        ):
+            runtime.check_registry_http(
+                Path("/fixture"),
+                lambda *args: subprocess.CompletedProcess([], 0, "owned-container", ""),
+            )
+
     def test_owned_runtime_command_returns_output_and_rejects_missing_tools(self):
         result = runtime._runtime_command([sys.executable, "-c", "print('ready')"], 5)
         self.assertEqual(result.returncode, 0)

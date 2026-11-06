@@ -192,6 +192,17 @@ impl Registry {
             .transpose()
     }
 
+    /// Metadata projection only; selection does not authorize disclosure.
+    pub async fn public_status(&self, key: OperationKey<'_>) -> Result<Option<String>> {
+        sqlx::query_scalar("SELECT CASE
+            WHEN EXISTS (SELECT 1 FROM fabric_operation_barriers b WHERE b.tenant_scope=o.tenant_scope AND b.operation_id=o.operation_id AND b.cancel_key IS NOT NULL) THEN 'CANCELLED'
+            WHEN EXISTS (SELECT 1 FROM fabric_selected_results s WHERE s.tenant_scope=o.tenant_scope AND s.operation_id=o.operation_id) THEN 'COMPUTE_SELECTED'
+            WHEN (intent->>'deadline_unix_ms')::numeric <= floor(extract(epoch FROM clock_timestamp())*1000) THEN 'EXPIRED'
+            ELSE NULL END FROM fabric_operations o WHERE tenant_scope=$1 AND operation_id=$2")
+            .bind(key.tenant_scope).bind(key.operation_id).fetch_optional(&self.pool).await?
+            .ok_or(RegistryError::NotFound)
+    }
+
     /// The caller is the authenticated workflow authority, not a worker or an activity retry.
     pub async fn ensure_attempt(
         &self,
