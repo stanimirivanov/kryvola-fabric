@@ -223,6 +223,14 @@ async fn bounded_uploads() {
         .await
         .unwrap();
     Registry::new(pool.clone()).migrate().await.unwrap();
+    // The down migration preserves schema/data but restores old SQLx-ledger compatibility.
+    sqlx::migrate!().undo(&pool, 7).await.unwrap();
+    let version: i64 = sqlx::query_scalar("SELECT max(version) FROM _sqlx_migrations")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(version, 7);
+    Registry::new(pool.clone()).migrate().await.unwrap();
     let folder = PathBuf::from(std::env::var_os("FABRIC_FIXTURE_PG_SOCKET").unwrap());
     let path = folder.parent().unwrap().join("upload-test-policy.json");
     let auth = Authorizer::new(path.clone()).unwrap();
@@ -305,6 +313,35 @@ async fn bounded_uploads() {
         .put_part(permit(7, "worker"), &id, 0, 4, &b"data"[..])
         .await
         .unwrap();
+    let staged_key: String = sqlx::query_scalar(
+        "SELECT object_key FROM fabric_upload_parts WHERE upload_id=$1 AND part_index=0",
+    )
+    .bind(&id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let mut rollback = pool.begin().await.unwrap();
+    assert!(
+        sqlx::raw_sql(include_str!(
+            "../migrations/0008_multipart_staging.down.sql"
+        ))
+        .execute(&mut *rollback)
+        .await
+        .is_err()
+    );
+    rollback.rollback().await.unwrap();
+    assert!(staged_key.starts_with(&format!("staging/{id}/0/")));
+    assert_eq!(
+        objects
+            .get(&Path::from(staged_key))
+            .await
+            .unwrap()
+            .bytes()
+            .await
+            .unwrap()
+            .as_ref(),
+        b"data"
+    );
     assert_eq!(
         store
             .put_part(permit(8, "worker"), &id, 0, 4, &b"evil"[..])
@@ -364,6 +401,20 @@ async fn bounded_uploads() {
             .unwrap()
             .is_none()
     );
+    // Simulate a pre-migration staged row: legacy bytes and a NULL mapping.
+    let mapped: String = sqlx::query_scalar(
+        "SELECT object_key FROM fabric_upload_parts WHERE upload_id=$1 AND part_index=0",
+    )
+    .bind(&id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    objects.delete(&Path::from(mapped)).await.unwrap();
+    sqlx::query("UPDATE fabric_upload_parts SET object_key=NULL WHERE upload_id=$1")
+        .bind(&id)
+        .execute(&pool)
+        .await
+        .unwrap();
     objects
         .put(
             &Path::from(format!("staging/{id}/0")),

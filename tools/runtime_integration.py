@@ -445,6 +445,25 @@ def run(folder: Path) -> None:
             AWS_ACCESS_KEY_ID=env["AWS_ACCESS_KEY_ID"],
             AWS_SECRET_ACCESS_KEY=env["AWS_SECRET_ACCESS_KEY"],
         )
+        pending = json.loads(
+            require(
+                invoke(
+                    "exec",
+                    "-T",
+                    "s3-client",
+                    "aws",
+                    "--endpoint-url",
+                    "http://s3:8333",
+                    "s3api",
+                    "list-multipart-uploads",
+                    "--bucket",
+                    "fabric-runtime",
+                ),
+                "S3 multipart cleanup probe",
+            )
+        )
+        if pending.get("Uploads"):
+            raise RuntimeError("S3 multipart sessions remain after upload lifecycle tests")
         for topic, retention in [("fabric-events", "86400000"), ("fabric-events-dead", "3600000")]:
             require(
                 invoke(
