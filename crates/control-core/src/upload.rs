@@ -112,7 +112,7 @@ impl UploadStore {
             return Err(UploadError::Denied);
         }
         let mut tx = self.begin(&mut permit).await?;
-        lock_upload(&mut tx, &permit, id, self.fenced).await?;
+        lock_upload(&mut tx, &permit, id, self.fenced, UploadAccess::Write).await?;
         if is_finalized(&mut tx, id).await? {
             return Err(UploadError::Conflict);
         }
@@ -191,7 +191,7 @@ impl UploadStore {
             return Err(UploadError::Size);
         }
         let mut tx = self.begin(&mut permit).await?;
-        let upload = lock_upload(&mut tx, &permit, id, self.fenced).await?;
+        let upload = lock_upload(&mut tx, &permit, id, self.fenced, UploadAccess::Write).await?;
         if is_finalized(&mut tx, id).await? {
             return Err(UploadError::Conflict);
         }
@@ -234,7 +234,7 @@ impl UploadStore {
 
     pub async fn abort(&self, mut permit: UploadPermit, id: &str) -> Result<()> {
         let mut tx = self.begin(&mut permit).await?;
-        lock_upload(&mut tx, &permit, id, self.fenced).await?;
+        lock_upload(&mut tx, &permit, id, self.fenced, UploadAccess::Abort).await?;
         if is_finalized(&mut tx, id).await? {
             return Err(UploadError::Conflict);
         }
@@ -246,11 +246,18 @@ impl UploadStore {
     }
 }
 
+#[derive(Clone, Copy)]
+enum UploadAccess {
+    Write,
+    Abort,
+}
+
 async fn lock_upload(
     tx: &mut Transaction<'_, Postgres>,
     permit: &UploadPermit,
     id: &str,
     fenced: bool,
+    access: UploadAccess,
 ) -> Result<sqlx::postgres::PgRow> {
     check_permit(permit)?;
     if id.len() != 32
@@ -262,12 +269,13 @@ async fn lock_upload(
     }
     let row = sqlx::query(
         "SELECT reserved_bytes, reserved_bytes - received_bytes AS remaining FROM fabric_uploads \
-         WHERE id = $1 AND tenant_scope = $2 AND certificate = $3 AND scope = $4 AND NOT reclaiming FOR UPDATE",
+         WHERE id = $1 AND tenant_scope = $2 AND certificate = $3 AND scope = $4 AND (NOT reclaiming OR $5) FOR UPDATE",
     )
     .bind(id)
     .bind(&permit.tenant)
     .bind(&permit.certificate)
     .bind(Json(&permit.scope))
+    .bind(matches!(access, UploadAccess::Abort))
     .fetch_optional(&mut **tx)
     .await?;
     let row = match row {

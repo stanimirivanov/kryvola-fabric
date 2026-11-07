@@ -518,6 +518,18 @@ def run(folder: Path) -> None:
             AWS_ACCESS_KEY_ID=env["AWS_ACCESS_KEY_ID"],
             AWS_SECRET_ACCESS_KEY=env["AWS_SECRET_ACCESS_KEY"],
         )
+        require(invoke("restart", "postgres", timeout=90), "Retention PostgreSQL restart")
+        require(
+            invoke("up", "-d", "--wait", "--wait-timeout=90", "postgres", timeout=120),
+            "Retention PostgreSQL restart readiness",
+        )
+        check_registry(
+            folder,
+            "pins_survive_postgres_restart",
+            FABRIC_FIXTURE_S3_ENDPOINT=f"http://{endpoint}",
+            AWS_ACCESS_KEY_ID=env["AWS_ACCESS_KEY_ID"],
+            AWS_SECRET_ACCESS_KEY=env["AWS_SECRET_ACCESS_KEY"],
+        )
         check_registry(
             folder,
             "finalization::verified_finalization",
