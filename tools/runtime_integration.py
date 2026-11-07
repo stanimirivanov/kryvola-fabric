@@ -562,6 +562,8 @@ def run(folder: Path) -> None:
             ("fabric-events-dead", "3600000"),
             ("fabric-worker-events", "86400000"),
             ("fabric-worker-dead", "3600000"),
+            ("fabric-crash-events", "86400000"),
+            ("fabric-crash-dead", "3600000"),
         ]:
             require(
                 invoke(
@@ -589,6 +591,42 @@ def run(folder: Path) -> None:
             "messaging::runtime_messaging_workers",
             FABRIC_FIXTURE_KAFKA=env["FABRIC_FIXTURE_KAFKA"],
         )
+        broker = require(invoke("ps", "-q", "redpanda"), "Redpanda fixture ID").strip()
+        check_registry(
+            folder,
+            "broker_crash::broker_crash_convergence",
+            FABRIC_FIXTURE_KAFKA=env["FABRIC_FIXTURE_KAFKA"],
+            FABRIC_FIXTURE_REDPANDA_CONTAINER=broker,
+        )
+        for topic, retention in [
+            ("fabric-crash-events", "86400000"),
+            ("fabric-crash-dead", "3600000"),
+        ]:
+            config = require(
+                invoke(
+                    "exec",
+                    "-T",
+                    "redpanda",
+                    "rpk",
+                    "topic",
+                    "describe",
+                    topic,
+                    "-c",
+                    "-X",
+                    "brokers=127.0.0.1:19092",
+                ),
+                "Redpanda topic configuration",
+            )
+            settings = {
+                columns[0]: columns[1]
+                for line in config.splitlines()
+                if len(columns := line.split()) >= 2
+            }
+            if (
+                settings.get("max.message.bytes") != "65536"
+                or settings.get("retention.ms") != retention
+            ):
+                raise RuntimeError("Broker crash fixture lost record size or retention settings")
         check_registry(
             folder,
             "bounded_reclamation_maintenance",

@@ -554,6 +554,17 @@ the process, leaving uncommitted work eligible for retry. The live fixture
 checks an unavailable broker, resumed publishing, SQL observation, redacted
 oversize rejection, and clean shutdown.
 
+M1-PR12-R4 extends F-live with a separate database, topics, and subprocesses.
+PostgreSQL advisory gates pause the outbox mark and inbox insert at known
+boundaries. The campaign observes the first Kafka record, kills the relay,
+and verifies that replay publishes the same event ID. It kills Redpanda before
+releasing the inbox gate, observes the durable receipt, kills the consumer,
+then restarts Redpanda and checks the group offset before and after replay.
+A reverse-order pair, a duplicate and an unpublished event converge through
+SQL without changing operation state. The fixture reads the oversized
+record's redacted dead letter and checks the broker's configured record cap
+and retention after restart.
+
 
 ## M1-PR4-R1 — Adopt M1 contracts and correct runtime errors (issue #31)
 
