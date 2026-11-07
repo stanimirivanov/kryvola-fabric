@@ -472,9 +472,31 @@ races pin acquisition against deletion, and restarts PostgreSQL before checking
 workflow, key-context, audit and selected-result protection against real S3
 deletion. Expiring each timed pin independently makes its artifact reclaimable.
 
-Operators can preview eligibility before invoking deletion. Scheduling and
-bucket lifecycle handling for objects that arrive after a timed-out remote
-write are separate concerns. Keep the staging bucket private.
+M1-PR11-R2 provides a one-shot operator command. Start the upgraded registry
+first so it applies migration 0009. Use the same registry and private bucket
+configuration as the upload runtime. The command opens no listener and prints
+aggregate counts, capped at four eligible uploads and four retained cleanup IDs
+per pass. The default mode only reads PostgreSQL.
+
+```sh
+fabric-runtime --reclaim DATABASE_URL_FILE S3_CONFIG_FILE 86400
+```
+
+Set the retention age in seconds for the deployment. Schedule repeated,
+non-overlapping invocations using the operator's timer or job runner. After the
+live negative checks pass and the report is reviewed, add `--delete` explicitly.
+A pass reports completed work and exits nonzero if any item failed. Failed
+sweeps can retry in later passes while other candidates progress. Remove
+`--delete` or stop the job to stop scheduled deletion.
+
+Each completed sweep retains the upload ID in PostgreSQL after releasing quota.
+Later passes revisit the exact private staging and immutable prefixes to remove
+objects that become visible after a timed-out write. Retain these tombstones
+because the runtime has no upper bound on when a remote write may complete.
+Coverage starts at migration 0009 and applies to completed objects. Incomplete
+multipart sessions and IDs deleted before migration 0009 are outside this
+maintenance path. The live gate verifies the default report, batch draining, retry
+after a failed SQL delete, late objects in both prefixes, and pin protection.
 
 ## M1-PR12 transactional notifications
 

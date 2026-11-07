@@ -339,9 +339,34 @@ async fn serve_mtls(
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn Error>> {
+    let args: Vec<_> = std::env::args().skip(1).collect();
+    if let [mode, remaining @ ..] = args.as_slice()
+        && mode == "--reclaim"
+    {
+        let [db, storage, retention, flags @ ..] = remaining else {
+            return Err("usage: fabric-runtime --reclaim DATABASE_URL_FILE S3_CONFIG_FILE RETENTION_SECONDS [--delete]".into());
+        };
+        let delete = match flags {
+            [] => false,
+            [flag] if flag == "--delete" => true,
+            _ => return Err("invalid reclamation flag".into()),
+        };
+        let seconds: u32 = retention.parse().map_err(|_| "invalid retention seconds")?;
+        if seconds == 0 {
+            return Err("retention seconds must be positive".into());
+        }
+        let pool = kryvola_fabric_core::registry_http::connect_pool(db).await?;
+        let report = UploadApi::connect(pool, storage)?
+            .reclamation_pass(seconds, delete)
+            .await?;
+        println!("{}", serde_json::to_string(&report)?);
+        if report.failures > 0 {
+            return Err("reclamation pass had retryable failures".into());
+        }
+        return Ok(());
+    }
     let runtime = Arc::new(RuntimeValidator::new()?);
     let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).await?;
-    let args: Vec<_> = std::env::args().skip(1).collect();
     match args.as_slice() {
         [] => {
             println!("{}", listener.local_addr()?);
@@ -384,7 +409,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
         _ => {
             return Err(
-                "usage: fabric-runtime [--spiffe WORKLOAD_API_ENDPOINT SERVER_SPIFFE_ID POLICY [--registry DATABASE_URL_FILE [--uploads S3_CONFIG_FILE]]]"
+                "usage: fabric-runtime [--spiffe WORKLOAD_API_ENDPOINT SERVER_SPIFFE_ID POLICY [--registry DATABASE_URL_FILE [--uploads S3_CONFIG_FILE]]] | --reclaim DATABASE_URL_FILE S3_CONFIG_FILE RETENTION_SECONDS [--delete]"
                     .into(),
             );
         }

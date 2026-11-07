@@ -3,7 +3,7 @@ use crate::{
     authorization::{Authorizer, Denial},
     limits::{CHUNK_MAX_BYTES, CONTROL_BYTES},
     runtime_contract::{RuntimeCode, RuntimeValidator},
-    upload::{UploadError, UploadStore},
+    upload::{ReclaimReport, UploadError, UploadStore},
 };
 use axum::{
     body::{Body, to_bytes},
@@ -75,6 +75,17 @@ impl UploadApi {
         }
         load(pool, path).map_err(|_| "upload store unavailable")
     }
+    pub async fn reclamation_pass(
+        &self,
+        retention_seconds: u32,
+        delete: bool,
+    ) -> Result<ReclaimReport, &'static str> {
+        self.store
+            .reclamation_pass(retention_seconds, delete)
+            .await
+            .map_err(|_| "reclamation unavailable")
+    }
+
     pub fn matches(method: &Method, path: &str) -> bool {
         if *method == Method::POST && path == "/v1/uploads" {
             return true;
