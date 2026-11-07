@@ -17,7 +17,7 @@ SELECT = "/v1/results/select"
 def check_trace(oracle, trace, oracle_hash):
     if (
         oracle["format"] != "kryvola-state-oracle-v1"
-        or oracle["model"] != "attempts"
+        or oracle["model"] not in {"attempts", "release"}
         or trace["format"] != "kryvola-state-trace-v1"
         or trace["model"] != oracle["model"]
         or trace["oracle_sha256"] != oracle_hash

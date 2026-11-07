@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
+from fencing_race import exercise as exercise_fencing
 from finalization_recovery import exercise as recover_finalization
 from selection_trace import exercise as exercise_selection
 from upload_campaign import exercise
@@ -461,6 +462,7 @@ class UploadHttpTests(unittest.TestCase):
                     address, boot = line.split()
                     port = int(address.rsplit(":", 1)[1])
                     grants.clear()
+                    selection_grants.clear()
                     publish()
 
                 def configure(private_endpoint):
@@ -497,7 +499,7 @@ class UploadHttpTests(unittest.TestCase):
                     nonlocal counter
                     counter += 1
                     token = f"{counter:064x}"
-                    selection_grants[:] = [
+                    selection_grants.append(
                         {
                             "spiffe_id": "spiffe://fabric.test/coordinator",
                             "token_sha256": hashlib.sha256(token.encode()).hexdigest(),
@@ -509,7 +511,7 @@ class UploadHttpTests(unittest.TestCase):
                             "actions": list(actions),
                             "expires_unix_ms": time.time_ns() // 1_000_000 + 45_000,
                         }
-                    ]
+                    )
                     publish()
                     return token
 
@@ -530,6 +532,20 @@ class UploadHttpTests(unittest.TestCase):
                     coordinator,
                     authorize_selection,
                     manifest,
+                )
+                exercise_fencing(
+                    self,
+                    request,
+                    issue,
+                    sql,
+                    operation,
+                    scope,
+                    coordinator,
+                    authorize_selection,
+                    manifest,
+                    publish,
+                    restart,
+                    container,
                 )
                 records = sql("SELECT scope::text FROM fabric_uploads")
                 for secret in (
