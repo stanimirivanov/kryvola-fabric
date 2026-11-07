@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{sync::OnceLock, time::Duration};
 
 use rdkafka::{
     ClientConfig, Message,
@@ -14,20 +14,21 @@ const WAIT: Duration = Duration::from_secs(15);
 // Reserve space for Kafka record and batch framing. Application records have no headers.
 const MESSAGE_BYTES: usize = CONTROL_BYTES - 1024;
 
-#[derive(Debug, PartialEq, Eq, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-struct Event {
-    version: u8,
-    id: i64,
-    tenant_scope: String,
-    operation_id: String,
-    kind: String,
+const NOTIFICATION_SCHEMA: &str =
+    include_str!("../../../../contracts/spec/notifications/v2/Notification.schema.json");
+
+/// Reference to a committed outbox event. Resolve the current operation through SQL.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeliveryRef {
+    pub id: i64,
+    pub tenant_scope: String,
+    pub operation_id: String,
+    pub kind: String,
 }
 
-impl Event {
+impl DeliveryRef {
     fn from_row(row: sqlx::postgres::PgRow) -> Result<Self> {
         Ok(Self {
-            version: 1,
             id: row.try_get("id")?,
             tenant_scope: row.try_get("tenant_scope")?,
             operation_id: row.try_get("operation_id")?,
@@ -35,8 +36,14 @@ impl Event {
         })
     }
 
+    pub fn operation_key(&self) -> OperationKey<'_> {
+        OperationKey {
+            tenant_scope: &self.tenant_scope,
+            operation_id: &self.operation_id,
+        }
+    }
+
     fn key(&self) -> String {
-        // Length framing avoids collisions when identifiers contain ':'.
         format!(
             "{}:{}{}",
             self.tenant_scope.len(),
@@ -44,13 +51,91 @@ impl Event {
             self.operation_id
         )
     }
+
+    fn encode(&self) -> Result<Vec<u8>> {
+        let wire = Notification {
+            id: self.id.to_string(),
+            kind: self.kind.clone(),
+            operation_id: self.operation_id.clone(),
+            tenant_scope: self.tenant_scope.clone(),
+            version: 2,
+        };
+        let value = serde_json::to_value(&wire).map_err(|_| RegistryError::Unavailable)?;
+        if !valid_notification(&value) {
+            return Err(RegistryError::Unavailable);
+        }
+        serde_json::to_vec(&wire).map_err(|_| RegistryError::Unavailable)
+    }
+}
+
+// Declaration order is canonical JSON field order. The schema constrains all
+// strings to ASCII alphabets with no JSON escapes.
+#[derive(Deserialize, Serialize)]
+struct Notification {
+    id: String,
+    kind: String,
+    operation_id: String,
+    tenant_scope: String,
+    version: u8,
+}
+
+fn valid_notification(value: &Value) -> bool {
+    static VALIDATOR: OnceLock<Option<jsonschema::Validator>> = OnceLock::new();
+    VALIDATOR
+        .get_or_init(|| {
+            let schema = serde_json::from_str(NOTIFICATION_SCHEMA).ok()?;
+            jsonschema::validator_for(&schema).ok()
+        })
+        .as_ref()
+        .is_some_and(|validator| validator.is_valid(value))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LegacyNotification {
+    version: u8,
+    id: i64,
+    tenant_scope: String,
+    operation_id: String,
+    kind: String,
+}
+
+fn decode_notification(body: &[u8]) -> Option<DeliveryRef> {
+    let value: Value = serde_json::from_slice(body).ok()?;
+    if value.get("version")?.as_u64()? == 1 {
+        // Deserialize the original bytes, preserving i64 and rejecting duplicate fields.
+        let wire: LegacyNotification = serde_json::from_slice(body).ok()?;
+        return (wire.version == 1 && wire.id > 0).then_some(DeliveryRef {
+            id: wire.id,
+            kind: wire.kind,
+            operation_id: wire.operation_id,
+            tenant_scope: wire.tenant_scope,
+        });
+    }
+    if !valid_notification(&value) {
+        return None;
+    }
+    let wire: Notification = serde_json::from_value(value).ok()?;
+    if serde_json::to_vec(&wire).ok()? != body {
+        return None;
+    }
+    Some(DeliveryRef {
+        id: wire.id.parse().ok()?,
+        kind: wire.kind,
+        operation_id: wire.operation_id,
+        tenant_scope: wire.tenant_scope,
+    })
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Delivery {
-    Accepted,
+    Accepted(DeliveryRef),
     Duplicate,
     Rejected,
+}
+
+fn valid_subscriber(subscriber: &str) -> bool {
+    !subscriber.is_empty() && subscriber.len() <= 249 && !subscriber.contains('\0')
 }
 
 pub struct Broker {
@@ -72,7 +157,7 @@ impl Broker {
         if topic.is_empty()
             || dead_letter.is_empty()
             || topic == dead_letter
-            || subscriber.is_empty()
+            || !valid_subscriber(subscriber)
         {
             return Err(RegistryError::InvalidIntent);
         }
@@ -147,8 +232,8 @@ impl Registry {
         else {
             return Ok(false);
         };
-        let event = Event::from_row(row)?;
-        let body = serde_json::to_vec(&event).map_err(|_| RegistryError::Unavailable)?;
+        let event = DeliveryRef::from_row(row)?;
+        let body = event.encode()?;
         broker.send(&broker.topic, &event.key(), &body).await?;
         sqlx::query("UPDATE fabric_outbox SET published = true WHERE id = $1")
             .bind(event.id)
@@ -163,6 +248,58 @@ impl Registry {
         sqlx::query("UPDATE fabric_outbox SET published = false WHERE tenant_scope = $1 AND operation_id = $2")
             .bind(key.tenant_scope).bind(key.operation_id).execute(&self.pool).await?;
         Ok(())
+    }
+
+    /// Read committed wakeups awaiting this subscriber, including events never sent
+    /// to Kafka and inbox receipts whose application handling did not finish.
+    pub async fn pending_deliveries(
+        &self,
+        subscriber: &str,
+        limit: u32,
+    ) -> Result<Vec<DeliveryRef>> {
+        if !valid_subscriber(subscriber) || !(1..=100).contains(&limit) {
+            return Err(RegistryError::InvalidIntent);
+        }
+        sqlx::query(
+            "SELECT o.id, o.tenant_scope, o.operation_id, o.kind FROM fabric_outbox o
+             WHERE NOT EXISTS (SELECT 1 FROM fabric_inbox i
+                 WHERE i.subscriber = $1 AND i.event_id = o.id AND i.handled)
+             ORDER BY o.id LIMIT $2",
+        )
+        .bind(subscriber)
+        .bind(i64::from(limit))
+        .fetch_all(&self.pool)
+        .await?
+        .into_iter()
+        .map(DeliveryRef::from_row)
+        .collect()
+    }
+
+    /// Acknowledge handling only after the caller has durably reconciled current SQL state.
+    /// This records subscriber progress and does not transition the operation.
+    pub async fn acknowledge_delivery(
+        &self,
+        subscriber: &str,
+        event: &DeliveryRef,
+    ) -> Result<bool> {
+        if !valid_subscriber(subscriber) {
+            return Err(RegistryError::InvalidIntent);
+        }
+        let result = sqlx::query(
+            "INSERT INTO fabric_inbox (subscriber, event_id, handled)
+             SELECT $1, id, true FROM fabric_outbox
+             WHERE id=$2 AND tenant_scope=$3 AND operation_id=$4 AND kind=$5
+             ON CONFLICT (subscriber, event_id) DO UPDATE SET handled=true
+             WHERE NOT fabric_inbox.handled",
+        )
+        .bind(subscriber)
+        .bind(event.id)
+        .bind(&event.tenant_scope)
+        .bind(&event.operation_id)
+        .bind(&event.kind)
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected() == 1)
     }
 
     pub async fn consume_one(&self, broker: &mut Broker) -> Result<Delivery> {
@@ -190,8 +327,8 @@ impl Registry {
                 {
                     return None;
                 }
-                let event: Event = serde_json::from_slice(body).ok()?;
-                (event.version == 1 && event.key().as_bytes() == key).then_some(event)
+                let event = decode_notification(body)?;
+                (event.key().as_bytes() == key).then_some(event)
             });
         let delivery = match parsed {
             Some(event) => self.record_delivery(&broker.subscriber, event).await?,
@@ -214,7 +351,7 @@ impl Registry {
         Ok(delivery)
     }
 
-    async fn record_delivery(&self, subscriber: &str, event: Event) -> Result<Delivery> {
+    async fn record_delivery(&self, subscriber: &str, event: DeliveryRef) -> Result<Delivery> {
         let mut tx = self.pool.begin().await?;
         let saved = sqlx::query(
             "SELECT id, tenant_scope, operation_id, kind FROM fabric_outbox WHERE id = $1",
@@ -222,7 +359,7 @@ impl Registry {
         .bind(event.id)
         .fetch_optional(&mut *tx)
         .await?
-        .map(Event::from_row)
+        .map(DeliveryRef::from_row)
         .transpose()?;
         if saved.as_ref() != Some(&event) {
             return Ok(Delivery::Rejected);
@@ -236,9 +373,39 @@ impl Registry {
         .await?;
         tx.commit().await?;
         Ok(if row.rows_affected() == 1 {
-            Delivery::Accepted
+            Delivery::Accepted(event)
         } else {
             Delivery::Duplicate
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn notification_wire_matches_spec_and_preserves_legacy_identity() {
+        let fixture: Value = serde_json::from_str(include_str!(
+            "../../../../contracts/spec/notifications/v2/vector.json"
+        ))
+        .unwrap();
+        let body = fixture["body"].as_str().unwrap();
+        let reference = decode_notification(body.as_bytes()).unwrap();
+        assert_eq!(reference.id, i64::MAX);
+        assert_eq!(reference.key(), fixture["key"].as_str().unwrap());
+        assert_eq!(reference.encode().unwrap(), body.as_bytes());
+        let legacy = br#"{"version":1,"id":9223372036854775807,"tenant_scope":"tenant:west","operation_id":"op:42","kind":"result_selected"}"#;
+        assert_eq!(decode_notification(legacy), Some(reference));
+
+        for invalid in [
+            body.replace("9223372036854775807", "9223372036854775808"),
+            format!(r#"{{"id":"1",{}"#, &body[1..]),
+            format!(" {body}"),
+            body.replace(r#""version":2"#, r#""version":2,"credentials":"secret""#),
+            body.replace(r#""version":2"#, r#""version":3"#),
+        ] {
+            assert!(decode_notification(invalid.as_bytes()).is_none());
+        }
     }
 }
