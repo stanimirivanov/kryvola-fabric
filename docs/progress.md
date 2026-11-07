@@ -428,6 +428,26 @@ commit failure, database outage responses, stable fences on retry, and successor
 epoch exhaustion. The administrative cancellation response supplies the durable
 barrier for callers to use before invoking Temporal termination.
 
+M1-PR10-R2 uses real HTTPS requests and fixture-owned PostgreSQL lock gates to
+observe four orderings. First selection precedes public cancellation,
+administrative cancellation precedes first selection, and recovery quarantine
+runs in both orders against first selection. The fixture observes the first
+backend waiting at its insert gate and the second blocked by that backend. It
+reads PostgreSQL before either commits, between the two requests, and after both
+return. The winner's foreign key and the outbox events reflect the commit order.
+
+F-live compares each observed history with the pinned release oracle and retains
+the snapshots, responses, blocking backend IDs and v1 traces in ignored
+`build/fencing-race-trace.json`. The fixture maps its prepared executions and
+shared finalized digest to the oracle's initial candidates. It projects an
+in-flight cancellation as pending, the durable tombstone as committed, and
+HTTP 200 as acknowledgement. The release model tracks cancellation separately
+from lease retirement. The fixture checks SQL retirement directly and projects
+the compute state at the barrier into the cancellation trace. Recovery projects
+the successor's empty, suspended view and checks that any old winner stays
+pinned in SQL. The last recovery case verifies 503 during a real PostgreSQL
+outage, then retries after database and runtime restart with fresh grants.
+
 ## M1-PR11 artifact retention and reclamation
 
 The internal retention API records expiring workflow, key-context and audit

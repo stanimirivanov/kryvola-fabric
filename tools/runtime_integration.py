@@ -449,6 +449,7 @@ def check_upload_http(folder: Path, storage_env: dict[str, str], invoke: Invoke)
         result.returncode
         or any(line not in result.stdout.splitlines() for line in boundary_proof)
         or "FENCED_SELECTION_TRACE_PASSED" not in result.stdout.splitlines()
+        or "FENCING_RACE_TRACE_PASSED" not in result.stdout.splitlines()
         or "FINALIZATION_RECOVERY_PASSED" not in result.stdout.splitlines()
         or "VERIFIED_FINALIZATION_HTTP_PASSED" not in result.stdout.splitlines()
         or "UPLOAD_FAILURE_CAMPAIGN_PASSED" not in result.stdout.splitlines()
