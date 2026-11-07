@@ -527,9 +527,32 @@ reconciliation because they have no recorded handling outcome.
 
 Configure broker topics with a 64 KiB record limit. The local Redpanda fixture
 uses 24-hour event retention and one-hour dead-letter retention. It exposes a
-temporary loopback listener. Production topic provisioning, identities, inbox
-draining and Temporal wakeup processing belong to later slices. PostgreSQL
-retains the outbox and inbox in this slice. Kafka delivery is at least once.
+temporary loopback listener. PostgreSQL retains the outbox and inbox.
+Kafka delivery is at least once.
+
+M1-PR12-R3 adds an operator-managed process after the registry has migrated
+the database. Pre-create the event and dead-letter topics, then run:
+
+```sh
+fabric-runtime --messaging DATABASE_URL_FILE KAFKA_CONFIG_FILE
+```
+
+The operator-owned JSON file supplies `bootstrap_servers`, `topic`,
+`dead_letter_topic`, and a stable `subscriber` group ID. The runtime uses TLS by
+default. It accepts optional `tls_ca_file` and paired `tls_certificate_file`
+and `tls_key_file` paths. The test fixture sets `allow_loopback_plaintext` and
+uses loopback bootstrap and advertised broker addresses.
+
+Each pass attempts up to eight publishes, eight inbox receipts, and eight SQL
+reconciliation reads in their respective loops, with a retry pause. The broker
+lane is isolated from SQL reconciliation. It queues Kafka offset commits
+after durable inbox receipt or confirmed dead-letter delivery. SQL acknowledgements record that the
+subscriber resolved the current operation and leave workflow transitions to the
+coordinator. Use a dedicated subscriber ID for this SQL observation worker.
+SIGTERM or Ctrl-C stops the loops. A broker shutdown over 20 seconds fails
+the process, leaving uncommitted work eligible for retry. The live fixture
+checks an unavailable broker, resumed publishing, SQL observation, redacted
+oversize rejection, and clean shutdown.
 
 
 ## M1-PR4-R1 — Adopt M1 contracts and correct runtime errors (issue #31)

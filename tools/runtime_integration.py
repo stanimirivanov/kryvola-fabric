@@ -557,7 +557,12 @@ def run(folder: Path) -> None:
         )
         if pending.get("Uploads"):
             raise RuntimeError("S3 multipart sessions remain after upload lifecycle tests")
-        for topic, retention in [("fabric-events", "86400000"), ("fabric-events-dead", "3600000")]:
+        for topic, retention in [
+            ("fabric-events", "86400000"),
+            ("fabric-events-dead", "3600000"),
+            ("fabric-worker-events", "86400000"),
+            ("fabric-worker-dead", "3600000"),
+        ]:
             require(
                 invoke(
                     "exec",
@@ -578,6 +583,11 @@ def run(folder: Path) -> None:
             )
         check_registry(
             folder, "outbox_round_trip", FABRIC_FIXTURE_KAFKA=env["FABRIC_FIXTURE_KAFKA"]
+        )
+        check_registry(
+            folder,
+            "messaging::runtime_messaging_workers",
+            FABRIC_FIXTURE_KAFKA=env["FABRIC_FIXTURE_KAFKA"],
         )
         check_registry(
             folder,

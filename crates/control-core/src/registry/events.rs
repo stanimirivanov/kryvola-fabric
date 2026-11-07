@@ -223,9 +223,11 @@ pub(super) async fn enqueue(
 impl Registry {
     pub async fn publish_one(&self, broker: &Broker) -> Result<bool> {
         let mut tx = self.pool.begin().await?;
+        // Publishing only changes a non-key field. Let inbox foreign-key
+        // checks proceed while a publisher waits for the broker.
         let Some(row) = sqlx::query(
             "SELECT id, tenant_scope, operation_id, kind FROM fabric_outbox
-             WHERE NOT published ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED",
+             WHERE NOT published ORDER BY id LIMIT 1 FOR NO KEY UPDATE SKIP LOCKED",
         )
         .fetch_optional(&mut *tx)
         .await?
@@ -303,21 +305,53 @@ impl Registry {
     }
 
     pub async fn consume_one(&self, broker: &mut Broker) -> Result<Delivery> {
+        match self
+            .poll_with_commit(broker, WAIT, CommitMode::Sync)
+            .await?
+        {
+            Some(delivery) => Ok(delivery),
+            None => {
+                broker.blocked = true;
+                Err(RegistryError::Unavailable)
+            }
+        }
+    }
+
+    /// A quiet broker is distinct from a failed or interrupted receipt.
+    pub async fn poll_delivery(
+        &self,
+        broker: &mut Broker,
+        wait: Duration,
+    ) -> Result<Option<Delivery>> {
+        self.poll_with_commit(broker, wait, CommitMode::Async).await
+    }
+
+    async fn poll_with_commit(
+        &self,
+        broker: &mut Broker,
+        wait: Duration,
+        commit_mode: CommitMode,
+    ) -> Result<Option<Delivery>> {
         if broker.blocked {
             return Err(RegistryError::Unavailable);
         }
         broker.blocked = true;
-        let result = self.consume_record(broker).await;
+        let result = self.consume_record(broker, wait, commit_mode).await;
         // On failure, reopening the group restarts from its committed offset.
         broker.blocked = result.is_err();
         result
     }
 
-    async fn consume_record(&self, broker: &Broker) -> Result<Delivery> {
-        let message = tokio::time::timeout(WAIT, broker.consumer.recv())
-            .await
-            .map_err(|_| RegistryError::Unavailable)?
-            .map_err(|_| RegistryError::Unavailable)?;
+    async fn consume_record(
+        &self,
+        broker: &Broker,
+        wait: Duration,
+        commit_mode: CommitMode,
+    ) -> Result<Option<Delivery>> {
+        let Ok(received) = tokio::time::timeout(wait, broker.consumer.recv()).await else {
+            return Ok(None);
+        };
+        let message = received.map_err(|_| RegistryError::Unavailable)?;
         let parsed = message
             .payload()
             .zip(message.key())
@@ -346,9 +380,9 @@ impl Registry {
         // Commit only after the durable inbox or the redacted DLQ has acknowledged.
         broker
             .consumer
-            .commit_message(&message, CommitMode::Sync)
+            .commit_message(&message, commit_mode)
             .map_err(|_| RegistryError::Unavailable)?;
-        Ok(delivery)
+        Ok(Some(delivery))
     }
 
     async fn record_delivery(&self, subscriber: &str, event: DeliveryRef) -> Result<Delivery> {

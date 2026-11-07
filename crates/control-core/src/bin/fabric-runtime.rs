@@ -29,6 +29,9 @@ use spiffe_rustls_tokio::TlsAcceptor;
 use tokio::{net::TcpListener, sync::Semaphore, time::timeout};
 use tokio_rustls::rustls;
 
+#[path = "fabric_runtime/messaging.rs"]
+mod messaging;
+
 const BODY_TIMEOUT: Duration = Duration::from_secs(2);
 
 fn reply(status: StatusCode, body: impl Into<String>) -> Response {
@@ -344,7 +347,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         && mode == "--reclaim"
     {
         let [db, storage, retention, flags @ ..] = remaining else {
-            return Err("usage: fabric-runtime --reclaim DATABASE_URL_FILE S3_CONFIG_FILE RETENTION_SECONDS [--delete]".into());
+            return Err("usage: fabric-runtime --reclaim DATABASE_URL_FILE S3_CONFIG_FILE RETENTION_SECONDS [--delete] | --messaging DATABASE_URL_FILE KAFKA_CONFIG_FILE".into());
         };
         let delete = match flags {
             [] => false,
@@ -364,6 +367,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
             return Err("reclamation pass had retryable failures".into());
         }
         return Ok(());
+    }
+    if let [mode, db, config] = args.as_slice()
+        && mode == "--messaging"
+    {
+        return messaging::run(db, config).await;
     }
     let runtime = Arc::new(RuntimeValidator::new()?);
     let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).await?;
@@ -409,7 +417,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
         _ => {
             return Err(
-                "usage: fabric-runtime [--spiffe WORKLOAD_API_ENDPOINT SERVER_SPIFFE_ID POLICY [--registry DATABASE_URL_FILE [--uploads S3_CONFIG_FILE]]] | --reclaim DATABASE_URL_FILE S3_CONFIG_FILE RETENTION_SECONDS [--delete]"
+                "usage: fabric-runtime [--spiffe WORKLOAD_API_ENDPOINT SERVER_SPIFFE_ID POLICY [--registry DATABASE_URL_FILE [--uploads S3_CONFIG_FILE]]] | --reclaim DATABASE_URL_FILE S3_CONFIG_FILE RETENTION_SECONDS [--delete] | --messaging DATABASE_URL_FILE KAFKA_CONFIG_FILE"
                     .into(),
             );
         }
