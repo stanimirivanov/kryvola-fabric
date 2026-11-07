@@ -459,7 +459,18 @@ Explicit reclamation locks the upload row, rechecks eligibility, and commits
 a deletion marker before touching S3. Pinning, selection and staging share
 that lock. A retry resumes marked cleanup. Quota returns only after both
 private prefixes are cleared and the database rows are deleted. Abort uses
-the same deletion path.
+the same deletion path. If abort returns 503 after committing the marker, retry
+the same upload ID with a fresh grant for the same workload, tenant, manifest
+and still-current attempt. A retry can resume an unfinished sweep and returns
+204 when cleanup completes. A missing upload returns 404, including after a
+completed abort whose response was lost. The marker still blocks writes and
+finalization, and abort still rejects finalized artifacts. If the attempt is
+no longer current, internal reclamation can resume cleanup.
+
+F-live checks that a stale eligibility report cannot override a newer pin,
+races pin acquisition against deletion, and restarts PostgreSQL before checking
+workflow, key-context, audit and selected-result protection against real S3
+deletion. Expiring each timed pin independently makes its artifact reclaimable.
 
 Operators can preview eligibility before invoking deletion. Scheduling and
 bucket lifecycle handling for objects that arrive after a timed-out remote

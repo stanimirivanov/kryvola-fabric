@@ -203,6 +203,25 @@ async fn registry_survives_postgres_restart() {
     assert!(third.fence > current.fence);
 }
 
+fn fixture_objects() -> std::sync::Arc<dyn object_store::ObjectStore> {
+    std::sync::Arc::new(
+        object_store::aws::AmazonS3Builder::new()
+            .with_endpoint(std::env::var("FABRIC_FIXTURE_S3_ENDPOINT").unwrap())
+            .with_access_key_id(std::env::var("AWS_ACCESS_KEY_ID").unwrap())
+            .with_secret_access_key(std::env::var("AWS_SECRET_ACCESS_KEY").unwrap())
+            .with_region("us-east-1")
+            .with_bucket_name("fabric-runtime")
+            .with_allow_http(true)
+            .build()
+            .unwrap(),
+    )
+}
+
+fn pin_restart_evidence() -> std::path::PathBuf {
+    std::path::PathBuf::from(std::env::var_os("FABRIC_FIXTURE_PG_SOCKET").unwrap())
+        .with_file_name("retention-fixture.json")
+}
+
 #[tokio::test]
 #[ignore = "requires the isolated PostgreSQL instance from runtime_integration.py ci"]
 async fn bounded_uploads() {
@@ -211,10 +230,9 @@ async fn bounded_uploads() {
         authorization::{Authorizer, Scope, sha256_hex},
         upload::{UploadError, UploadStore},
     };
-    use object_store::{ObjectStore, ObjectStoreExt, aws::AmazonS3Builder, path::Path};
+    use object_store::{ObjectStoreExt, path::Path};
     use std::{
         path::PathBuf,
-        sync::Arc,
         time::{SystemTime, UNIX_EPOCH},
     };
 
@@ -267,17 +285,7 @@ async fn bounded_uploads() {
         auth.redeem_upload(&workload, &token, &scope).unwrap()
     };
 
-    let objects: Arc<dyn ObjectStore> = Arc::new(
-        AmazonS3Builder::new()
-            .with_endpoint(std::env::var("FABRIC_FIXTURE_S3_ENDPOINT").unwrap())
-            .with_access_key_id(std::env::var("AWS_ACCESS_KEY_ID").unwrap())
-            .with_secret_access_key(std::env::var("AWS_SECRET_ACCESS_KEY").unwrap())
-            .with_region("us-east-1")
-            .with_bucket_name("fabric-runtime")
-            .with_allow_http(true)
-            .build()
-            .unwrap(),
-    );
+    let objects = fixture_objects();
     let store = UploadStore::new(pool.clone(), objects.clone(), 8);
     assert_eq!(
         store.reserve(permit(1, "worker"), 0).await,
@@ -354,6 +362,49 @@ async fn bounded_uploads() {
             .await,
         Err(UploadError::Size)
     );
+    // A database failure after object deletion leaves the durable marker and quota intact.
+    sqlx::raw_sql(
+        "CREATE FUNCTION fail_fixture_upload_delete() RETURNS trigger LANGUAGE plpgsql AS
+         $$ BEGIN RAISE EXCEPTION 'fixture delete failure'; END; $$;
+         CREATE TRIGGER fail_fixture_upload_delete BEFORE DELETE ON fabric_uploads
+         FOR EACH ROW EXECUTE FUNCTION fail_fixture_upload_delete();",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        store.abort(permit(30, "worker"), &id).await,
+        Err(UploadError::Unavailable)
+    );
+    let marked: (bool, i64) =
+        sqlx::query_as("SELECT reclaiming, reserved_bytes FROM fabric_uploads WHERE id=$1")
+            .bind(&id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(marked, (true, 6));
+    assert_eq!(
+        store.abort(permit(31, "other-worker"), &id).await,
+        Err(UploadError::Denied)
+    );
+    assert_eq!(
+        store
+            .put_part(permit(32, "worker"), &id, 1, 1, &b"x"[..])
+            .await,
+        Err(UploadError::Denied)
+    );
+    assert!(
+        objects
+            .list(Some(&Path::from(format!("staging/{id}"))))
+            .try_next()
+            .await
+            .unwrap()
+            .is_none()
+    );
+    sqlx::query("DROP TRIGGER fail_fixture_upload_delete ON fabric_uploads")
+        .execute(&pool)
+        .await
+        .unwrap();
     store.abort(permit(10, "worker"), &id).await.unwrap();
     assert!(
         objects
@@ -699,6 +750,51 @@ async fn bounded_uploads() {
             .unwrap()
             .is_none()
     );
+    // Each expiring pin must protect its own artifact independently after restart.
+    let retention = UploadStore::new(pool.clone(), objects.clone(), 32);
+    let mut protected = vec![winner.upload_id];
+    for (index, kind) in [PinKind::Workflow, PinKind::KeyContext, PinKind::Audit]
+        .into_iter()
+        .enumerate()
+    {
+        let n = 40 + 3 * index as u8;
+        let id = retention.reserve(permit(n, "worker"), 4).await.unwrap();
+        retention
+            .put_part(permit(n + 1, "worker"), &id, 0, 4, &[0, 1, 2, 255][..])
+            .await
+            .unwrap();
+        retention
+            .finalize(permit(n + 2, "worker"), &id, &canonical)
+            .await
+            .unwrap();
+        sqlx::query("UPDATE fabric_uploads SET touched_at = clock_timestamp() - interval '2 hours' WHERE id=$1")
+            .bind(&id).execute(&pool).await.unwrap();
+        assert!(
+            retention
+                .eligible_for_reclaim(60)
+                .await
+                .unwrap()
+                .contains(&id)
+        );
+        retention
+            .pin(
+                "tenant-fixture",
+                &id,
+                kind,
+                "restart-fixture",
+                expires + 600_000,
+            )
+            .await
+            .unwrap();
+        // A stale eligibility report cannot overrule a pin that committed in the meantime.
+        assert!(!retention.reclaim(&id, 60).await.unwrap());
+        protected.push(id);
+    }
+    std::fs::write(
+        pin_restart_evidence(),
+        serde_json::to_vec(&protected).unwrap(),
+    )
+    .unwrap();
     pool.close().await;
     assert_eq!(
         registry.cancel_operation(key, "cancel-op").await,
@@ -711,6 +807,58 @@ async fn bounded_uploads() {
             .unwrap(),
     );
     assert_eq!(reopened.cancel_operation(key, "cancel-op").await, left);
+}
+
+#[tokio::test]
+#[ignore = "requires the live gate to restart PostgreSQL after bounded_uploads"]
+async fn pins_survive_postgres_restart() {
+    use futures_util::TryStreamExt;
+    use kryvola_fabric_core::upload::UploadStore;
+    use object_store::path::Path;
+
+    let protected: Vec<String> =
+        serde_json::from_slice(&std::fs::read(pin_restart_evidence()).unwrap()).unwrap();
+    assert_eq!(protected.len(), 4);
+    let pool = PgPoolOptions::new()
+        .connect_with(fixture_options())
+        .await
+        .unwrap();
+    let objects = fixture_objects();
+    let store = UploadStore::new(pool.clone(), objects.clone(), 32);
+    let eligible = store.eligible_for_reclaim(60).await.unwrap();
+    for id in &protected {
+        assert!(!eligible.contains(id));
+        assert!(!store.reclaim(id, 60).await.unwrap());
+        assert!(
+            objects
+                .list(Some(&Path::from(format!("immutable/{id}"))))
+                .try_next()
+                .await
+                .unwrap()
+                .is_some()
+        );
+    }
+
+    for id in &protected[1..] {
+        let expired =
+            sqlx::query("UPDATE fabric_artifact_pins SET expires_unix_ms=0 WHERE upload_id=$1")
+                .bind(id)
+                .execute(&pool)
+                .await
+                .unwrap();
+        assert_eq!(expired.rows_affected(), 1);
+        assert!(store.reclaim(id, 60).await.unwrap());
+        assert!(!store.reclaim(id, 60).await.unwrap());
+        assert!(
+            objects
+                .list(Some(&Path::from(format!("immutable/{id}"))))
+                .try_next()
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
+    assert!(!store.reclaim(&protected[0], 60).await.unwrap());
 }
 
 #[tokio::test]

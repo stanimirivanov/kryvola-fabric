@@ -126,7 +126,7 @@ impl UploadStore {
         id: &str,
     ) -> Result<FinalizedArtifact> {
         let mut tx = self.begin(&mut permit).await?;
-        lock_upload(&mut tx, &permit, id, self.fenced).await?;
+        lock_upload(&mut tx, &permit, id, self.fenced, UploadAccess::Write).await?;
         let key = Path::from(format!("staging/{id}/manifest"));
         let metadata = timeout(IO_TIMEOUT, self.objects.head(&key))
             .await
@@ -163,7 +163,7 @@ impl UploadStore {
         }
         let size = number(&manifest["serialized_bytes"])?;
         let mut tx = self.begin(&mut permit).await?;
-        let upload = lock_upload(&mut tx, &permit, id, self.fenced).await?;
+        let upload = lock_upload(&mut tx, &permit, id, self.fenced, UploadAccess::Write).await?;
         if self.fenced {
             let context: Option<String> = sqlx::query_scalar(
                 "SELECT intent->'key_context_ref'->>'key_context_digest' FROM fabric_operations WHERE tenant_scope=$1 AND operation_id=$2"
