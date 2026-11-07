@@ -892,9 +892,23 @@ async fn outbox_round_trip() {
         .await
         .unwrap();
     assert!(registry.publish_one(&broker).await.unwrap());
+    let Delivery::Accepted(accepted) = registry.consume_one(&mut broker).await.unwrap() else {
+        panic!("expected a durable reference");
+    };
+    let operation = registry
+        .lookup_operation(accepted.operation_key())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(operation.operation["operation_id"], accepted.operation_id);
+    assert_eq!(operation.operation["tenant_scope"], accepted.tenant_scope);
     assert_eq!(
-        registry.consume_one(&mut broker).await.unwrap(),
-        Delivery::Accepted
+        registry
+            .pending_deliveries("fixture", 1)
+            .await
+            .unwrap()
+            .as_slice(),
+        std::slice::from_ref(&accepted)
     );
     assert_eq!(
         registry.consume_one(&mut broker).await.unwrap(),
@@ -912,7 +926,7 @@ async fn outbox_round_trip() {
     assert_eq!(kinds, 4);
 
     // A group with a committed inbox row but no committed Kafka offset replays it.
-    sqlx::query("INSERT INTO fabric_inbox SELECT 'fixture-restart', event_id FROM fabric_inbox WHERE subscriber = 'fixture'")
+    sqlx::query("INSERT INTO fabric_inbox (subscriber, event_id) SELECT 'fixture-restart', event_id FROM fabric_inbox WHERE subscriber = 'fixture'")
         .execute(&pool).await.unwrap();
     let mut restarted = Broker::new(
         &config,
@@ -926,7 +940,108 @@ async fn outbox_round_trip() {
         Delivery::Duplicate
     );
 
+    assert!(
+        registry
+            .acknowledge_delivery("fixture", &accepted)
+            .await
+            .unwrap()
+    );
+    assert!(
+        !registry
+            .acknowledge_delivery("fixture", &accepted)
+            .await
+            .unwrap()
+    );
+
+    assert_eq!(
+        registry
+            .pending_deliveries("fixture-restart", 1)
+            .await
+            .unwrap()
+            .as_slice(),
+        std::slice::from_ref(&accepted)
+    );
+    let mut mismatched = accepted.clone();
+    mismatched.operation_id.push_str("-other");
+    assert!(
+        !registry
+            .acknowledge_delivery("fixture-restart", &mismatched)
+            .await
+            .unwrap()
+    );
+
+    // A fresh SQL client can find committed outbox rows even if they never reached Kafka.
+    let reopened = Registry::new(pool.clone());
+    let pending = reopened.pending_deliveries("fixture", 2).await.unwrap();
+    assert_eq!(pending.len(), 2);
+    assert!(pending.iter().all(|reference| reference.id != accepted.id));
+    for reference in pending {
+        let published: bool = sqlx::query_scalar("SELECT published FROM fabric_outbox WHERE id=$1")
+            .bind(reference.id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert!(!published);
+        assert!(
+            reopened
+                .lookup_operation(reference.operation_key())
+                .await
+                .unwrap()
+                .is_some()
+        );
+        assert!(
+            reopened
+                .acknowledge_delivery("fixture", &reference)
+                .await
+                .unwrap()
+        );
+    }
+    assert_eq!(
+        reopened.pending_deliveries("fixture", 0).await,
+        Err(RegistryError::InvalidIntent)
+    );
+    assert_eq!(
+        reopened.pending_deliveries("fixture", 101).await,
+        Err(RegistryError::InvalidIntent)
+    );
+
+    // Kafka receipt after SQL reconciliation is still a duplicate.
+    assert!(registry.publish_one(&broker).await.unwrap());
+    assert_eq!(
+        registry.consume_one(&mut broker).await.unwrap(),
+        Delivery::Duplicate
+    );
+    assert_eq!(
+        registry
+            .lookup_operation(accepted.operation_key())
+            .await
+            .unwrap(),
+        Some(operation)
+    );
+
     let producer: FutureProducer = config.create().unwrap();
+    let legacy = json!({"version": 1, "id": accepted.id, "tenant_scope": accepted.tenant_scope,
+        "operation_id": accepted.operation_id, "kind": accepted.kind});
+    let key = format!(
+        "{}:{}{}",
+        accepted.tenant_scope.len(),
+        accepted.tenant_scope,
+        accepted.operation_id
+    );
+    producer
+        .send(
+            FutureRecord::to("fabric-events")
+                .key(&key)
+                .payload(&legacy.to_string()),
+            Duration::from_secs(5),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        registry.consume_one(&mut broker).await.unwrap(),
+        Delivery::Duplicate
+    );
+
     producer
         .send(
             FutureRecord::to("fabric-events")
@@ -945,7 +1060,7 @@ async fn outbox_round_trip() {
             .fetch_one(&pool)
             .await
             .unwrap();
-    assert_eq!(count, 1);
+    assert_eq!(count, 3);
 }
 
 #[path = "registry/finalization.rs"]

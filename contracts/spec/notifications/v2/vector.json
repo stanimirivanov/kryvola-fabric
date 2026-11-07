@@ -1,0 +1,11 @@
+{
+  "envelope": {
+    "version": 2,
+    "id": "9223372036854775807",
+    "tenant_scope": "tenant:west",
+    "operation_id": "op:42",
+    "kind": "result_selected"
+  },
+  "key": "11:tenant:westop:42",
+  "body": "{\"id\":\"9223372036854775807\",\"kind\":\"result_selected\",\"operation_id\":\"op:42\",\"tenant_scope\":\"tenant:west\",\"version\":2}"
+}

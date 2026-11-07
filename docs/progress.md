@@ -506,12 +506,24 @@ relay marks a row published only after Redpanda acknowledges the send. The
 tenant and operation determine the partition key. Consumers must tolerate
 duplicates and reordering, and read current registry state before acting.
 
-The consumer validates bounded, header-free records against the retained outbox
-and inserts one durable inbox row per subscriber and event. It acknowledges
-the Kafka offset after the database commit. A failed or interrupted receive
-requires reopening the consumer from its committed offset. Requeue retained
-outbox rows to repair missed notifications. A rejected record goes to the
-dead-letter topic with a fixed code and no original payload or key.
+The relay now emits the pinned Spec v2 notification with a lossless decimal event
+ID and the existing operation key. The consumer accepts retained private v1
+records with exact signed integer IDs. Both formats match the authoritative
+outbox row and share one inbox identity per subscriber and event. Upgrade
+consumers before enabling v2 publishers because v1-only readers reject v2.
+Rejected records produce a fixed dead-letter code.
+
+`consume_one` returns an accepted event reference after committing the inbox
+receipt and Kafka offset. Use its operation key to read current registry state.
+After an interrupted receive, reopen the consumer from its committed offset.
+`pending_deliveries` reads up to 100 committed SQL references per subscriber,
+including unpublished events and receipts awaiting handling. A caller may
+see the same reference again until it durably reconciles current state and
+calls `acknowledge_delivery`. Acknowledgement is idempotent and records only
+subscriber progress. Reconciliation is a read of pending work, so concurrent
+callers can observe the same event. Existing registry fences govern any
+operation changes. Migration 0010 makes existing inbox receipts pending for
+reconciliation because they have no recorded handling outcome.
 
 Configure broker topics with a 64 KiB record limit. The local Redpanda fixture
 uses 24-hour event retention and one-hour dead-letter retention. It exposes a
