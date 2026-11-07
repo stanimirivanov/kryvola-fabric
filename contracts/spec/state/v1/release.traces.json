@@ -1,0 +1,3123 @@
+[
+  {
+    "format": "kryvola-state-trace-v1",
+    "model": "release",
+    "oracle_sha256": "62ded11f0b68f6a6ba75a1d364a059132ac4ef50747ca44879f133844402ed8e",
+    "steps": [
+      {
+        "action": "release:0",
+        "outcome": "REJECTED",
+        "state": {
+          "workflowEpoch": 0,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": null
+          },
+          "selectedEpoch": null,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": null,
+          "authorization": null,
+          "ledger": []
+        }
+      },
+      {
+        "action": "authorize-release",
+        "outcome": "REJECTED",
+        "state": {
+          "workflowEpoch": 0,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": null
+          },
+          "selectedEpoch": null,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": null,
+          "authorization": null,
+          "ledger": []
+        }
+      },
+      {
+        "action": "select:0:1-1",
+        "outcome": "SELECTED",
+        "state": {
+          "workflowEpoch": 0,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 0,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": null,
+          "authorization": null,
+          "ledger": []
+        }
+      },
+      {
+        "action": "verify",
+        "outcome": "VERIFIED",
+        "state": {
+          "workflowEpoch": 0,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 0,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "authorization": null,
+          "ledger": []
+        }
+      },
+      {
+        "action": "authorize-release",
+        "outcome": "RELEASE_AUTHORIZED",
+        "state": {
+          "workflowEpoch": 0,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 0,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "authorization": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "ledger": []
+        }
+      },
+      {
+        "action": "tick",
+        "outcome": "TIME_ADVANCED",
+        "state": {
+          "workflowEpoch": 0,
+          "run": 0,
+          "compute": {
+            "now": 1,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": true,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 0,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "authorization": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "ledger": []
+        }
+      },
+      {
+        "action": "continue-as-new",
+        "outcome": "CONTINUED",
+        "state": {
+          "workflowEpoch": 0,
+          "run": 1,
+          "compute": {
+            "now": 1,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": true,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 0,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "authorization": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "ledger": []
+        }
+      },
+      {
+        "action": "release:0",
+        "outcome": "GRANTED",
+        "state": {
+          "workflowEpoch": 0,
+          "run": 1,
+          "compute": {
+            "now": 1,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": true,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 0,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "authorization": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "ledger": [
+            {
+              "key": "tenant/job/output/recipient/0",
+              "output": "artifact/1-1",
+              "epoch": 0
+            }
+          ]
+        }
+      },
+      {
+        "action": "release:0",
+        "outcome": "REPLAYED",
+        "state": {
+          "workflowEpoch": 0,
+          "run": 1,
+          "compute": {
+            "now": 1,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": true,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 0,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "authorization": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "ledger": [
+            {
+              "key": "tenant/job/output/recipient/0",
+              "output": "artifact/1-1",
+              "epoch": 0
+            }
+          ]
+        }
+      },
+      {
+        "action": "select:0:1-2",
+        "outcome": "CONFLICT",
+        "state": {
+          "workflowEpoch": 0,
+          "run": 1,
+          "compute": {
+            "now": 1,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": true,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 0,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "authorization": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "ledger": [
+            {
+              "key": "tenant/job/output/recipient/0",
+              "output": "artifact/1-1",
+              "epoch": 0
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "format": "kryvola-state-trace-v1",
+    "model": "release",
+    "oracle_sha256": "62ded11f0b68f6a6ba75a1d364a059132ac4ef50747ca44879f133844402ed8e",
+    "steps": [
+      {
+        "action": "select:0:1-1",
+        "outcome": "SELECTED",
+        "state": {
+          "workflowEpoch": 0,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 0,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": null,
+          "authorization": null,
+          "ledger": []
+        }
+      },
+      {
+        "action": "verify",
+        "outcome": "VERIFIED",
+        "state": {
+          "workflowEpoch": 0,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 0,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "authorization": null,
+          "ledger": []
+        }
+      },
+      {
+        "action": "authorize-release",
+        "outcome": "RELEASE_AUTHORIZED",
+        "state": {
+          "workflowEpoch": 0,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 0,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "authorization": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "ledger": []
+        }
+      },
+      {
+        "action": "cancel-request",
+        "outcome": "CANCEL_PENDING",
+        "state": {
+          "workflowEpoch": 0,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 0,
+          "suspended": false,
+          "cancel": "PENDING",
+          "revoked": false,
+          "evidence": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "authorization": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "ledger": []
+        }
+      },
+      {
+        "action": "cancel-ack",
+        "outcome": "REJECTED",
+        "state": {
+          "workflowEpoch": 0,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 0,
+          "suspended": false,
+          "cancel": "PENDING",
+          "revoked": false,
+          "evidence": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "authorization": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "ledger": []
+        }
+      },
+      {
+        "action": "cancel-commit",
+        "outcome": "CANCEL_COMMITTED",
+        "state": {
+          "workflowEpoch": 0,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 0,
+          "suspended": false,
+          "cancel": "COMMITTED",
+          "revoked": false,
+          "evidence": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "authorization": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "ledger": []
+        }
+      },
+      {
+        "action": "release:0",
+        "outcome": "REJECTED",
+        "state": {
+          "workflowEpoch": 0,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 0,
+          "suspended": false,
+          "cancel": "COMMITTED",
+          "revoked": false,
+          "evidence": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "authorization": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "ledger": []
+        }
+      },
+      {
+        "action": "cancel-ack",
+        "outcome": "CANCELLED",
+        "state": {
+          "workflowEpoch": 0,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 0,
+          "suspended": false,
+          "cancel": "ACKNOWLEDGED",
+          "revoked": false,
+          "evidence": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "authorization": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "ledger": []
+        }
+      },
+      {
+        "action": "recover",
+        "outcome": "RECOVERING",
+        "state": {
+          "workflowEpoch": 1,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [],
+            "executions": [],
+            "selected": null
+          },
+          "selectedEpoch": null,
+          "suspended": true,
+          "cancel": "ACKNOWLEDGED",
+          "revoked": false,
+          "evidence": null,
+          "authorization": null,
+          "ledger": []
+        }
+      },
+      {
+        "action": "reconcile",
+        "outcome": "RECONCILED",
+        "state": {
+          "workflowEpoch": 1,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [],
+            "executions": [],
+            "selected": null
+          },
+          "selectedEpoch": null,
+          "suspended": false,
+          "cancel": "ACKNOWLEDGED",
+          "revoked": false,
+          "evidence": null,
+          "authorization": null,
+          "ledger": []
+        }
+      },
+      {
+        "action": "select:1:1-1",
+        "outcome": "REJECTED",
+        "state": {
+          "workflowEpoch": 1,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [],
+            "executions": [],
+            "selected": null
+          },
+          "selectedEpoch": null,
+          "suspended": false,
+          "cancel": "ACKNOWLEDGED",
+          "revoked": false,
+          "evidence": null,
+          "authorization": null,
+          "ledger": []
+        }
+      }
+    ]
+  },
+  {
+    "format": "kryvola-state-trace-v1",
+    "model": "release",
+    "oracle_sha256": "62ded11f0b68f6a6ba75a1d364a059132ac4ef50747ca44879f133844402ed8e",
+    "steps": [
+      {
+        "action": "select:0:1-2",
+        "outcome": "SELECTED",
+        "state": {
+          "workflowEpoch": 0,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-2",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 0,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": null,
+          "authorization": null,
+          "ledger": []
+        }
+      },
+      {
+        "action": "verify",
+        "outcome": "VERIFIED",
+        "state": {
+          "workflowEpoch": 0,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-2",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 0,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": {
+            "epoch": 0,
+            "output": "artifact/1-2"
+          },
+          "authorization": null,
+          "ledger": []
+        }
+      },
+      {
+        "action": "authorize-release",
+        "outcome": "RELEASE_AUTHORIZED",
+        "state": {
+          "workflowEpoch": 0,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-2",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 0,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": {
+            "epoch": 0,
+            "output": "artifact/1-2"
+          },
+          "authorization": {
+            "epoch": 0,
+            "output": "artifact/1-2"
+          },
+          "ledger": []
+        }
+      },
+      {
+        "action": "cancel-request",
+        "outcome": "CANCEL_PENDING",
+        "state": {
+          "workflowEpoch": 0,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-2",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 0,
+          "suspended": false,
+          "cancel": "PENDING",
+          "revoked": false,
+          "evidence": {
+            "epoch": 0,
+            "output": "artifact/1-2"
+          },
+          "authorization": {
+            "epoch": 0,
+            "output": "artifact/1-2"
+          },
+          "ledger": []
+        }
+      },
+      {
+        "action": "release:0",
+        "outcome": "GRANTED",
+        "state": {
+          "workflowEpoch": 0,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-2",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 0,
+          "suspended": false,
+          "cancel": "PENDING",
+          "revoked": false,
+          "evidence": {
+            "epoch": 0,
+            "output": "artifact/1-2"
+          },
+          "authorization": {
+            "epoch": 0,
+            "output": "artifact/1-2"
+          },
+          "ledger": [
+            {
+              "key": "tenant/job/output/recipient/0",
+              "output": "artifact/1-2",
+              "epoch": 0
+            }
+          ]
+        }
+      },
+      {
+        "action": "cancel-commit",
+        "outcome": "CANCEL_COMMITTED",
+        "state": {
+          "workflowEpoch": 0,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-2",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 0,
+          "suspended": false,
+          "cancel": "COMMITTED",
+          "revoked": false,
+          "evidence": {
+            "epoch": 0,
+            "output": "artifact/1-2"
+          },
+          "authorization": {
+            "epoch": 0,
+            "output": "artifact/1-2"
+          },
+          "ledger": [
+            {
+              "key": "tenant/job/output/recipient/0",
+              "output": "artifact/1-2",
+              "epoch": 0
+            }
+          ]
+        }
+      },
+      {
+        "action": "cancel-ack",
+        "outcome": "CANCELLED",
+        "state": {
+          "workflowEpoch": 0,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-2",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 0,
+          "suspended": false,
+          "cancel": "ACKNOWLEDGED",
+          "revoked": false,
+          "evidence": {
+            "epoch": 0,
+            "output": "artifact/1-2"
+          },
+          "authorization": {
+            "epoch": 0,
+            "output": "artifact/1-2"
+          },
+          "ledger": [
+            {
+              "key": "tenant/job/output/recipient/0",
+              "output": "artifact/1-2",
+              "epoch": 0
+            }
+          ]
+        }
+      },
+      {
+        "action": "release:0",
+        "outcome": "REJECTED",
+        "state": {
+          "workflowEpoch": 0,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-2",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 0,
+          "suspended": false,
+          "cancel": "ACKNOWLEDGED",
+          "revoked": false,
+          "evidence": {
+            "epoch": 0,
+            "output": "artifact/1-2"
+          },
+          "authorization": {
+            "epoch": 0,
+            "output": "artifact/1-2"
+          },
+          "ledger": [
+            {
+              "key": "tenant/job/output/recipient/0",
+              "output": "artifact/1-2",
+              "epoch": 0
+            }
+          ]
+        }
+      },
+      {
+        "action": "recover",
+        "outcome": "RECOVERING",
+        "state": {
+          "workflowEpoch": 1,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [],
+            "executions": [],
+            "selected": null
+          },
+          "selectedEpoch": null,
+          "suspended": true,
+          "cancel": "ACKNOWLEDGED",
+          "revoked": false,
+          "evidence": null,
+          "authorization": null,
+          "ledger": [
+            {
+              "key": "tenant/job/output/recipient/0",
+              "output": "artifact/1-2",
+              "epoch": 0
+            }
+          ]
+        }
+      },
+      {
+        "action": "reconcile",
+        "outcome": "RECONCILED",
+        "state": {
+          "workflowEpoch": 1,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [],
+            "executions": [],
+            "selected": null
+          },
+          "selectedEpoch": null,
+          "suspended": false,
+          "cancel": "ACKNOWLEDGED",
+          "revoked": false,
+          "evidence": null,
+          "authorization": null,
+          "ledger": [
+            {
+              "key": "tenant/job/output/recipient/0",
+              "output": "artifact/1-2",
+              "epoch": 0
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "format": "kryvola-state-trace-v1",
+    "model": "release",
+    "oracle_sha256": "62ded11f0b68f6a6ba75a1d364a059132ac4ef50747ca44879f133844402ed8e",
+    "steps": [
+      {
+        "action": "select:0:1-1",
+        "outcome": "SELECTED",
+        "state": {
+          "workflowEpoch": 0,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 0,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": null,
+          "authorization": null,
+          "ledger": []
+        }
+      },
+      {
+        "action": "verify",
+        "outcome": "VERIFIED",
+        "state": {
+          "workflowEpoch": 0,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 0,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "authorization": null,
+          "ledger": []
+        }
+      },
+      {
+        "action": "authorize-release",
+        "outcome": "RELEASE_AUTHORIZED",
+        "state": {
+          "workflowEpoch": 0,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 0,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "authorization": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "ledger": []
+        }
+      },
+      {
+        "action": "release:0",
+        "outcome": "GRANTED",
+        "state": {
+          "workflowEpoch": 0,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 0,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "authorization": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "ledger": [
+            {
+              "key": "tenant/job/output/recipient/0",
+              "output": "artifact/1-1",
+              "epoch": 0
+            }
+          ]
+        }
+      },
+      {
+        "action": "recover",
+        "outcome": "RECOVERING",
+        "state": {
+          "workflowEpoch": 1,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [],
+            "executions": [],
+            "selected": null
+          },
+          "selectedEpoch": null,
+          "suspended": true,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": null,
+          "authorization": null,
+          "ledger": [
+            {
+              "key": "tenant/job/output/recipient/0",
+              "output": "artifact/1-1",
+              "epoch": 0
+            }
+          ]
+        }
+      },
+      {
+        "action": "release:0",
+        "outcome": "REJECTED",
+        "state": {
+          "workflowEpoch": 1,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [],
+            "executions": [],
+            "selected": null
+          },
+          "selectedEpoch": null,
+          "suspended": true,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": null,
+          "authorization": null,
+          "ledger": [
+            {
+              "key": "tenant/job/output/recipient/0",
+              "output": "artifact/1-1",
+              "epoch": 0
+            }
+          ]
+        }
+      },
+      {
+        "action": "select:1:1-2",
+        "outcome": "REJECTED",
+        "state": {
+          "workflowEpoch": 1,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [],
+            "executions": [],
+            "selected": null
+          },
+          "selectedEpoch": null,
+          "suspended": true,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": null,
+          "authorization": null,
+          "ledger": [
+            {
+              "key": "tenant/job/output/recipient/0",
+              "output": "artifact/1-1",
+              "epoch": 0
+            }
+          ]
+        }
+      },
+      {
+        "action": "reconcile",
+        "outcome": "RECONCILED",
+        "state": {
+          "workflowEpoch": 1,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [],
+            "executions": [],
+            "selected": null
+          },
+          "selectedEpoch": null,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": null,
+          "authorization": null,
+          "ledger": [
+            {
+              "key": "tenant/job/output/recipient/0",
+              "output": "artifact/1-1",
+              "epoch": 0
+            }
+          ]
+        }
+      },
+      {
+        "action": "workflow-readmit",
+        "outcome": "READMITTED",
+        "state": {
+          "workflowEpoch": 1,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": null
+          },
+          "selectedEpoch": null,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": null,
+          "authorization": null,
+          "ledger": [
+            {
+              "key": "tenant/job/output/recipient/0",
+              "output": "artifact/1-1",
+              "epoch": 0
+            }
+          ]
+        }
+      },
+      {
+        "action": "select:0:1-1",
+        "outcome": "REJECTED",
+        "state": {
+          "workflowEpoch": 1,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": null
+          },
+          "selectedEpoch": null,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": null,
+          "authorization": null,
+          "ledger": [
+            {
+              "key": "tenant/job/output/recipient/0",
+              "output": "artifact/1-1",
+              "epoch": 0
+            }
+          ]
+        }
+      },
+      {
+        "action": "select:1:1-2",
+        "outcome": "SELECTED",
+        "state": {
+          "workflowEpoch": 1,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-2",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 1,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": null,
+          "authorization": null,
+          "ledger": [
+            {
+              "key": "tenant/job/output/recipient/0",
+              "output": "artifact/1-1",
+              "epoch": 0
+            }
+          ]
+        }
+      },
+      {
+        "action": "verify",
+        "outcome": "VERIFIED",
+        "state": {
+          "workflowEpoch": 1,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-2",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 1,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": {
+            "epoch": 1,
+            "output": "artifact/1-2"
+          },
+          "authorization": null,
+          "ledger": [
+            {
+              "key": "tenant/job/output/recipient/0",
+              "output": "artifact/1-1",
+              "epoch": 0
+            }
+          ]
+        }
+      },
+      {
+        "action": "authorize-release",
+        "outcome": "RELEASE_AUTHORIZED",
+        "state": {
+          "workflowEpoch": 1,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-2",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 1,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": {
+            "epoch": 1,
+            "output": "artifact/1-2"
+          },
+          "authorization": {
+            "epoch": 1,
+            "output": "artifact/1-2"
+          },
+          "ledger": [
+            {
+              "key": "tenant/job/output/recipient/0",
+              "output": "artifact/1-1",
+              "epoch": 0
+            }
+          ]
+        }
+      },
+      {
+        "action": "release:0",
+        "outcome": "REJECTED",
+        "state": {
+          "workflowEpoch": 1,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-2",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 1,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": {
+            "epoch": 1,
+            "output": "artifact/1-2"
+          },
+          "authorization": {
+            "epoch": 1,
+            "output": "artifact/1-2"
+          },
+          "ledger": [
+            {
+              "key": "tenant/job/output/recipient/0",
+              "output": "artifact/1-1",
+              "epoch": 0
+            }
+          ]
+        }
+      },
+      {
+        "action": "release:1",
+        "outcome": "DISCLOSURE_CONFLICT",
+        "state": {
+          "workflowEpoch": 1,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-2",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 1,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": {
+            "epoch": 1,
+            "output": "artifact/1-2"
+          },
+          "authorization": {
+            "epoch": 1,
+            "output": "artifact/1-2"
+          },
+          "ledger": [
+            {
+              "key": "tenant/job/output/recipient/0",
+              "output": "artifact/1-1",
+              "epoch": 0
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "format": "kryvola-state-trace-v1",
+    "model": "release",
+    "oracle_sha256": "62ded11f0b68f6a6ba75a1d364a059132ac4ef50747ca44879f133844402ed8e",
+    "steps": [
+      {
+        "action": "select:0:1-1",
+        "outcome": "SELECTED",
+        "state": {
+          "workflowEpoch": 0,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 0,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": null,
+          "authorization": null,
+          "ledger": []
+        }
+      },
+      {
+        "action": "verify",
+        "outcome": "VERIFIED",
+        "state": {
+          "workflowEpoch": 0,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 0,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "authorization": null,
+          "ledger": []
+        }
+      },
+      {
+        "action": "authorize-release",
+        "outcome": "RELEASE_AUTHORIZED",
+        "state": {
+          "workflowEpoch": 0,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 0,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "authorization": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "ledger": []
+        }
+      },
+      {
+        "action": "release:0",
+        "outcome": "GRANTED",
+        "state": {
+          "workflowEpoch": 0,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 0,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "authorization": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "ledger": [
+            {
+              "key": "tenant/job/output/recipient/0",
+              "output": "artifact/1-1",
+              "epoch": 0
+            }
+          ]
+        }
+      },
+      {
+        "action": "recover",
+        "outcome": "RECOVERING",
+        "state": {
+          "workflowEpoch": 1,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [],
+            "executions": [],
+            "selected": null
+          },
+          "selectedEpoch": null,
+          "suspended": true,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": null,
+          "authorization": null,
+          "ledger": [
+            {
+              "key": "tenant/job/output/recipient/0",
+              "output": "artifact/1-1",
+              "epoch": 0
+            }
+          ]
+        }
+      },
+      {
+        "action": "reconcile-unknown",
+        "outcome": "RECOVERY_PENDING",
+        "state": {
+          "workflowEpoch": 1,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [],
+            "executions": [],
+            "selected": null
+          },
+          "selectedEpoch": null,
+          "suspended": true,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": null,
+          "authorization": null,
+          "ledger": [
+            {
+              "key": "tenant/job/output/recipient/0",
+              "output": "artifact/1-1",
+              "epoch": 0
+            }
+          ]
+        }
+      },
+      {
+        "action": "workflow-readmit",
+        "outcome": "REJECTED",
+        "state": {
+          "workflowEpoch": 1,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [],
+            "executions": [],
+            "selected": null
+          },
+          "selectedEpoch": null,
+          "suspended": true,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": null,
+          "authorization": null,
+          "ledger": [
+            {
+              "key": "tenant/job/output/recipient/0",
+              "output": "artifact/1-1",
+              "epoch": 0
+            }
+          ]
+        }
+      },
+      {
+        "action": "release:1",
+        "outcome": "REJECTED",
+        "state": {
+          "workflowEpoch": 1,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [],
+            "executions": [],
+            "selected": null
+          },
+          "selectedEpoch": null,
+          "suspended": true,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": null,
+          "authorization": null,
+          "ledger": [
+            {
+              "key": "tenant/job/output/recipient/0",
+              "output": "artifact/1-1",
+              "epoch": 0
+            }
+          ]
+        }
+      },
+      {
+        "action": "reconcile",
+        "outcome": "RECONCILED",
+        "state": {
+          "workflowEpoch": 1,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [],
+            "executions": [],
+            "selected": null
+          },
+          "selectedEpoch": null,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": null,
+          "authorization": null,
+          "ledger": [
+            {
+              "key": "tenant/job/output/recipient/0",
+              "output": "artifact/1-1",
+              "epoch": 0
+            }
+          ]
+        }
+      },
+      {
+        "action": "workflow-readmit",
+        "outcome": "READMITTED",
+        "state": {
+          "workflowEpoch": 1,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": null
+          },
+          "selectedEpoch": null,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": null,
+          "authorization": null,
+          "ledger": [
+            {
+              "key": "tenant/job/output/recipient/0",
+              "output": "artifact/1-1",
+              "epoch": 0
+            }
+          ]
+        }
+      },
+      {
+        "action": "select:1:1-1",
+        "outcome": "SELECTED",
+        "state": {
+          "workflowEpoch": 1,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 1,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": null,
+          "authorization": null,
+          "ledger": [
+            {
+              "key": "tenant/job/output/recipient/0",
+              "output": "artifact/1-1",
+              "epoch": 0
+            }
+          ]
+        }
+      },
+      {
+        "action": "verify",
+        "outcome": "VERIFIED",
+        "state": {
+          "workflowEpoch": 1,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 1,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": {
+            "epoch": 1,
+            "output": "artifact/1-1"
+          },
+          "authorization": null,
+          "ledger": [
+            {
+              "key": "tenant/job/output/recipient/0",
+              "output": "artifact/1-1",
+              "epoch": 0
+            }
+          ]
+        }
+      },
+      {
+        "action": "authorize-release",
+        "outcome": "RELEASE_AUTHORIZED",
+        "state": {
+          "workflowEpoch": 1,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 1,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": {
+            "epoch": 1,
+            "output": "artifact/1-1"
+          },
+          "authorization": {
+            "epoch": 1,
+            "output": "artifact/1-1"
+          },
+          "ledger": [
+            {
+              "key": "tenant/job/output/recipient/0",
+              "output": "artifact/1-1",
+              "epoch": 0
+            }
+          ]
+        }
+      },
+      {
+        "action": "release:1",
+        "outcome": "REPLAYED",
+        "state": {
+          "workflowEpoch": 1,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 1,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": {
+            "epoch": 1,
+            "output": "artifact/1-1"
+          },
+          "authorization": {
+            "epoch": 1,
+            "output": "artifact/1-1"
+          },
+          "ledger": [
+            {
+              "key": "tenant/job/output/recipient/0",
+              "output": "artifact/1-1",
+              "epoch": 0
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "format": "kryvola-state-trace-v1",
+    "model": "release",
+    "oracle_sha256": "62ded11f0b68f6a6ba75a1d364a059132ac4ef50747ca44879f133844402ed8e",
+    "steps": [
+      {
+        "action": "select:0:1-1",
+        "outcome": "SELECTED",
+        "state": {
+          "workflowEpoch": 0,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 0,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": null,
+          "authorization": null,
+          "ledger": []
+        }
+      },
+      {
+        "action": "verify",
+        "outcome": "VERIFIED",
+        "state": {
+          "workflowEpoch": 0,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 0,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "authorization": null,
+          "ledger": []
+        }
+      },
+      {
+        "action": "authorize-release",
+        "outcome": "RELEASE_AUTHORIZED",
+        "state": {
+          "workflowEpoch": 0,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 0,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": false,
+          "evidence": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "authorization": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "ledger": []
+        }
+      },
+      {
+        "action": "revoke",
+        "outcome": "REVOKED",
+        "state": {
+          "workflowEpoch": 0,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 0,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": true,
+          "evidence": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "authorization": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "ledger": []
+        }
+      },
+      {
+        "action": "release:0",
+        "outcome": "REJECTED",
+        "state": {
+          "workflowEpoch": 0,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [
+              {
+                "epoch": 1,
+                "fence": 1,
+                "until": 1,
+                "retired": false,
+                "intent": true
+              }
+            ],
+            "executions": [
+              {
+                "id": "1-1",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              },
+              {
+                "id": "1-2",
+                "epoch": 1,
+                "fence": 1,
+                "done": true
+              }
+            ],
+            "selected": {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1
+            }
+          },
+          "selectedEpoch": 0,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": true,
+          "evidence": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "authorization": {
+            "epoch": 0,
+            "output": "artifact/1-1"
+          },
+          "ledger": []
+        }
+      },
+      {
+        "action": "recover",
+        "outcome": "RECOVERING",
+        "state": {
+          "workflowEpoch": 1,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [],
+            "executions": [],
+            "selected": null
+          },
+          "selectedEpoch": null,
+          "suspended": true,
+          "cancel": "NONE",
+          "revoked": true,
+          "evidence": null,
+          "authorization": null,
+          "ledger": []
+        }
+      },
+      {
+        "action": "reconcile",
+        "outcome": "RECONCILED",
+        "state": {
+          "workflowEpoch": 1,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [],
+            "executions": [],
+            "selected": null
+          },
+          "selectedEpoch": null,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": true,
+          "evidence": null,
+          "authorization": null,
+          "ledger": []
+        }
+      },
+      {
+        "action": "select:1:1-1",
+        "outcome": "REJECTED",
+        "state": {
+          "workflowEpoch": 1,
+          "run": 0,
+          "compute": {
+            "now": 0,
+            "attempts": [],
+            "executions": [],
+            "selected": null
+          },
+          "selectedEpoch": null,
+          "suspended": false,
+          "cancel": "NONE",
+          "revoked": true,
+          "evidence": null,
+          "authorization": null,
+          "ledger": []
+        }
+      }
+    ]
+  }
+]

@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "format": {
+      "type": "string",
+      "enum": [
+        "kryvola-state-trace-v1"
+      ]
+    },
+    "model": {
+      "type": "string",
+      "enum": [
+        "attempts",
+        "release"
+      ]
+    },
+    "oracle_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "outcome": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "state": {}
+        },
+        "required": [
+          "action",
+          "outcome",
+          "state"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 10000,
+      "minItems": 1
+    }
+  },
+  "required": [
+    "format",
+    "model",
+    "oracle_sha256",
+    "steps"
+  ],
+  "additionalProperties": false
+}

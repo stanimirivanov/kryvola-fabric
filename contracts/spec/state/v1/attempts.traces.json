@@ -1,0 +1,1147 @@
+[
+  {
+    "format": "kryvola-state-trace-v1",
+    "model": "attempts",
+    "oracle_sha256": "10e8edebd861aa18a75e3ce80efb6af8c97b17aefea459cd9cf97807e3bde9ee",
+    "steps": [
+      {
+        "action": "worker-authorize",
+        "outcome": "REJECTED",
+        "state": {
+          "now": 0,
+          "attempts": [],
+          "executions": [],
+          "selected": null
+        }
+      },
+      {
+        "action": "workflow-authorize",
+        "outcome": "AUTHORIZED",
+        "state": {
+          "now": 0,
+          "attempts": [
+            {
+              "epoch": 1,
+              "fence": 1,
+              "until": null,
+              "retired": false,
+              "intent": false
+            }
+          ],
+          "executions": [],
+          "selected": null
+        }
+      },
+      {
+        "action": "ensure:1",
+        "outcome": "ENSURED",
+        "state": {
+          "now": 0,
+          "attempts": [
+            {
+              "epoch": 1,
+              "fence": 1,
+              "until": 1,
+              "retired": false,
+              "intent": true
+            }
+          ],
+          "executions": [],
+          "selected": null
+        }
+      },
+      {
+        "action": "launch:1",
+        "outcome": "LAUNCHED",
+        "state": {
+          "now": 0,
+          "attempts": [
+            {
+              "epoch": 1,
+              "fence": 1,
+              "until": 1,
+              "retired": false,
+              "intent": true
+            }
+          ],
+          "executions": [
+            {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1,
+              "done": false
+            }
+          ],
+          "selected": null
+        }
+      },
+      {
+        "action": "ensure:1",
+        "outcome": "ENSURED",
+        "state": {
+          "now": 0,
+          "attempts": [
+            {
+              "epoch": 1,
+              "fence": 1,
+              "until": 1,
+              "retired": false,
+              "intent": true
+            }
+          ],
+          "executions": [
+            {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1,
+              "done": false
+            }
+          ],
+          "selected": null
+        }
+      },
+      {
+        "action": "launch:1",
+        "outcome": "LAUNCHED",
+        "state": {
+          "now": 0,
+          "attempts": [
+            {
+              "epoch": 1,
+              "fence": 1,
+              "until": 1,
+              "retired": false,
+              "intent": true
+            }
+          ],
+          "executions": [
+            {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1,
+              "done": false
+            },
+            {
+              "id": "1-2",
+              "epoch": 1,
+              "fence": 1,
+              "done": false
+            }
+          ],
+          "selected": null
+        }
+      },
+      {
+        "action": "ack:1",
+        "outcome": "ACKNOWLEDGED",
+        "state": {
+          "now": 0,
+          "attempts": [
+            {
+              "epoch": 1,
+              "fence": 1,
+              "until": 1,
+              "retired": false,
+              "intent": false
+            }
+          ],
+          "executions": [
+            {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1,
+              "done": false
+            },
+            {
+              "id": "1-2",
+              "epoch": 1,
+              "fence": 1,
+              "done": false
+            }
+          ],
+          "selected": null
+        }
+      },
+      {
+        "action": "complete:1-2",
+        "outcome": "COMPLETED",
+        "state": {
+          "now": 0,
+          "attempts": [
+            {
+              "epoch": 1,
+              "fence": 1,
+              "until": 1,
+              "retired": false,
+              "intent": false
+            }
+          ],
+          "executions": [
+            {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1,
+              "done": false
+            },
+            {
+              "id": "1-2",
+              "epoch": 1,
+              "fence": 1,
+              "done": true
+            }
+          ],
+          "selected": null
+        }
+      },
+      {
+        "action": "select:1-2",
+        "outcome": "SELECTED",
+        "state": {
+          "now": 0,
+          "attempts": [
+            {
+              "epoch": 1,
+              "fence": 1,
+              "until": 1,
+              "retired": false,
+              "intent": false
+            }
+          ],
+          "executions": [
+            {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1,
+              "done": false
+            },
+            {
+              "id": "1-2",
+              "epoch": 1,
+              "fence": 1,
+              "done": true
+            }
+          ],
+          "selected": {
+            "id": "1-2",
+            "epoch": 1,
+            "fence": 1
+          }
+        }
+      },
+      {
+        "action": "complete:1-1",
+        "outcome": "COMPLETED",
+        "state": {
+          "now": 0,
+          "attempts": [
+            {
+              "epoch": 1,
+              "fence": 1,
+              "until": 1,
+              "retired": false,
+              "intent": false
+            }
+          ],
+          "executions": [
+            {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1,
+              "done": true
+            },
+            {
+              "id": "1-2",
+              "epoch": 1,
+              "fence": 1,
+              "done": true
+            }
+          ],
+          "selected": {
+            "id": "1-2",
+            "epoch": 1,
+            "fence": 1
+          }
+        }
+      },
+      {
+        "action": "select:1-1",
+        "outcome": "CONFLICT",
+        "state": {
+          "now": 0,
+          "attempts": [
+            {
+              "epoch": 1,
+              "fence": 1,
+              "until": 1,
+              "retired": false,
+              "intent": false
+            }
+          ],
+          "executions": [
+            {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1,
+              "done": true
+            },
+            {
+              "id": "1-2",
+              "epoch": 1,
+              "fence": 1,
+              "done": true
+            }
+          ],
+          "selected": {
+            "id": "1-2",
+            "epoch": 1,
+            "fence": 1
+          }
+        }
+      },
+      {
+        "action": "select:1-2",
+        "outcome": "SELECTED",
+        "state": {
+          "now": 0,
+          "attempts": [
+            {
+              "epoch": 1,
+              "fence": 1,
+              "until": 1,
+              "retired": false,
+              "intent": false
+            }
+          ],
+          "executions": [
+            {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1,
+              "done": true
+            },
+            {
+              "id": "1-2",
+              "epoch": 1,
+              "fence": 1,
+              "done": true
+            }
+          ],
+          "selected": {
+            "id": "1-2",
+            "epoch": 1,
+            "fence": 1
+          }
+        }
+      },
+      {
+        "action": "tick",
+        "outcome": "TIME_ADVANCED",
+        "state": {
+          "now": 1,
+          "attempts": [
+            {
+              "epoch": 1,
+              "fence": 1,
+              "until": 1,
+              "retired": true,
+              "intent": false
+            }
+          ],
+          "executions": [
+            {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1,
+              "done": true
+            },
+            {
+              "id": "1-2",
+              "epoch": 1,
+              "fence": 1,
+              "done": true
+            }
+          ],
+          "selected": {
+            "id": "1-2",
+            "epoch": 1,
+            "fence": 1
+          }
+        }
+      },
+      {
+        "action": "lookup",
+        "outcome": "SELECTED",
+        "state": {
+          "now": 1,
+          "attempts": [
+            {
+              "epoch": 1,
+              "fence": 1,
+              "until": 1,
+              "retired": true,
+              "intent": false
+            }
+          ],
+          "executions": [
+            {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1,
+              "done": true
+            },
+            {
+              "id": "1-2",
+              "epoch": 1,
+              "fence": 1,
+              "done": true
+            }
+          ],
+          "selected": {
+            "id": "1-2",
+            "epoch": 1,
+            "fence": 1
+          }
+        }
+      },
+      {
+        "action": "ensure:1",
+        "outcome": "SELECTED",
+        "state": {
+          "now": 1,
+          "attempts": [
+            {
+              "epoch": 1,
+              "fence": 1,
+              "until": 1,
+              "retired": true,
+              "intent": false
+            }
+          ],
+          "executions": [
+            {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1,
+              "done": true
+            },
+            {
+              "id": "1-2",
+              "epoch": 1,
+              "fence": 1,
+              "done": true
+            }
+          ],
+          "selected": {
+            "id": "1-2",
+            "epoch": 1,
+            "fence": 1
+          }
+        }
+      }
+    ]
+  },
+  {
+    "format": "kryvola-state-trace-v1",
+    "model": "attempts",
+    "oracle_sha256": "10e8edebd861aa18a75e3ce80efb6af8c97b17aefea459cd9cf97807e3bde9ee",
+    "steps": [
+      {
+        "action": "workflow-authorize",
+        "outcome": "AUTHORIZED",
+        "state": {
+          "now": 0,
+          "attempts": [
+            {
+              "epoch": 1,
+              "fence": 1,
+              "until": null,
+              "retired": false,
+              "intent": false
+            }
+          ],
+          "executions": [],
+          "selected": null
+        }
+      },
+      {
+        "action": "ensure:1",
+        "outcome": "ENSURED",
+        "state": {
+          "now": 0,
+          "attempts": [
+            {
+              "epoch": 1,
+              "fence": 1,
+              "until": 1,
+              "retired": false,
+              "intent": true
+            }
+          ],
+          "executions": [],
+          "selected": null
+        }
+      },
+      {
+        "action": "launch:1",
+        "outcome": "LAUNCHED",
+        "state": {
+          "now": 0,
+          "attempts": [
+            {
+              "epoch": 1,
+              "fence": 1,
+              "until": 1,
+              "retired": false,
+              "intent": true
+            }
+          ],
+          "executions": [
+            {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1,
+              "done": false
+            }
+          ],
+          "selected": null
+        }
+      },
+      {
+        "action": "tick",
+        "outcome": "TIME_ADVANCED",
+        "state": {
+          "now": 1,
+          "attempts": [
+            {
+              "epoch": 1,
+              "fence": 1,
+              "until": 1,
+              "retired": true,
+              "intent": true
+            }
+          ],
+          "executions": [
+            {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1,
+              "done": false
+            }
+          ],
+          "selected": null
+        }
+      },
+      {
+        "action": "renew:1",
+        "outcome": "REJECTED",
+        "state": {
+          "now": 1,
+          "attempts": [
+            {
+              "epoch": 1,
+              "fence": 1,
+              "until": 1,
+              "retired": true,
+              "intent": true
+            }
+          ],
+          "executions": [
+            {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1,
+              "done": false
+            }
+          ],
+          "selected": null
+        }
+      },
+      {
+        "action": "ensure:1",
+        "outcome": "ATTEMPT_EXPIRED",
+        "state": {
+          "now": 1,
+          "attempts": [
+            {
+              "epoch": 1,
+              "fence": 1,
+              "until": 1,
+              "retired": true,
+              "intent": true
+            }
+          ],
+          "executions": [
+            {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1,
+              "done": false
+            }
+          ],
+          "selected": null
+        }
+      },
+      {
+        "action": "worker-authorize",
+        "outcome": "REJECTED",
+        "state": {
+          "now": 1,
+          "attempts": [
+            {
+              "epoch": 1,
+              "fence": 1,
+              "until": 1,
+              "retired": true,
+              "intent": true
+            }
+          ],
+          "executions": [
+            {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1,
+              "done": false
+            }
+          ],
+          "selected": null
+        }
+      },
+      {
+        "action": "workflow-authorize",
+        "outcome": "AUTHORIZED",
+        "state": {
+          "now": 1,
+          "attempts": [
+            {
+              "epoch": 1,
+              "fence": 1,
+              "until": 1,
+              "retired": true,
+              "intent": true
+            },
+            {
+              "epoch": 2,
+              "fence": 2,
+              "until": null,
+              "retired": false,
+              "intent": false
+            }
+          ],
+          "executions": [
+            {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1,
+              "done": false
+            }
+          ],
+          "selected": null
+        }
+      },
+      {
+        "action": "ensure:2",
+        "outcome": "ENSURED",
+        "state": {
+          "now": 1,
+          "attempts": [
+            {
+              "epoch": 1,
+              "fence": 1,
+              "until": 1,
+              "retired": true,
+              "intent": true
+            },
+            {
+              "epoch": 2,
+              "fence": 2,
+              "until": 2,
+              "retired": false,
+              "intent": true
+            }
+          ],
+          "executions": [
+            {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1,
+              "done": false
+            }
+          ],
+          "selected": null
+        }
+      },
+      {
+        "action": "complete:1-1",
+        "outcome": "COMPLETED",
+        "state": {
+          "now": 1,
+          "attempts": [
+            {
+              "epoch": 1,
+              "fence": 1,
+              "until": 1,
+              "retired": true,
+              "intent": true
+            },
+            {
+              "epoch": 2,
+              "fence": 2,
+              "until": 2,
+              "retired": false,
+              "intent": true
+            }
+          ],
+          "executions": [
+            {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1,
+              "done": true
+            }
+          ],
+          "selected": null
+        }
+      },
+      {
+        "action": "select:1-1",
+        "outcome": "REJECTED",
+        "state": {
+          "now": 1,
+          "attempts": [
+            {
+              "epoch": 1,
+              "fence": 1,
+              "until": 1,
+              "retired": true,
+              "intent": true
+            },
+            {
+              "epoch": 2,
+              "fence": 2,
+              "until": 2,
+              "retired": false,
+              "intent": true
+            }
+          ],
+          "executions": [
+            {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1,
+              "done": true
+            }
+          ],
+          "selected": null
+        }
+      },
+      {
+        "action": "launch:2",
+        "outcome": "LAUNCHED",
+        "state": {
+          "now": 1,
+          "attempts": [
+            {
+              "epoch": 1,
+              "fence": 1,
+              "until": 1,
+              "retired": true,
+              "intent": true
+            },
+            {
+              "epoch": 2,
+              "fence": 2,
+              "until": 2,
+              "retired": false,
+              "intent": true
+            }
+          ],
+          "executions": [
+            {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1,
+              "done": true
+            },
+            {
+              "id": "2-1",
+              "epoch": 2,
+              "fence": 2,
+              "done": false
+            }
+          ],
+          "selected": null
+        }
+      },
+      {
+        "action": "complete:2-1",
+        "outcome": "COMPLETED",
+        "state": {
+          "now": 1,
+          "attempts": [
+            {
+              "epoch": 1,
+              "fence": 1,
+              "until": 1,
+              "retired": true,
+              "intent": true
+            },
+            {
+              "epoch": 2,
+              "fence": 2,
+              "until": 2,
+              "retired": false,
+              "intent": true
+            }
+          ],
+          "executions": [
+            {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1,
+              "done": true
+            },
+            {
+              "id": "2-1",
+              "epoch": 2,
+              "fence": 2,
+              "done": true
+            }
+          ],
+          "selected": null
+        }
+      },
+      {
+        "action": "select:2-1",
+        "outcome": "SELECTED",
+        "state": {
+          "now": 1,
+          "attempts": [
+            {
+              "epoch": 1,
+              "fence": 1,
+              "until": 1,
+              "retired": true,
+              "intent": true
+            },
+            {
+              "epoch": 2,
+              "fence": 2,
+              "until": 2,
+              "retired": false,
+              "intent": true
+            }
+          ],
+          "executions": [
+            {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1,
+              "done": true
+            },
+            {
+              "id": "2-1",
+              "epoch": 2,
+              "fence": 2,
+              "done": true
+            }
+          ],
+          "selected": {
+            "id": "2-1",
+            "epoch": 2,
+            "fence": 2
+          }
+        }
+      }
+    ]
+  },
+  {
+    "format": "kryvola-state-trace-v1",
+    "model": "attempts",
+    "oracle_sha256": "10e8edebd861aa18a75e3ce80efb6af8c97b17aefea459cd9cf97807e3bde9ee",
+    "steps": [
+      {
+        "action": "workflow-authorize",
+        "outcome": "AUTHORIZED",
+        "state": {
+          "now": 0,
+          "attempts": [
+            {
+              "epoch": 1,
+              "fence": 1,
+              "until": null,
+              "retired": false,
+              "intent": false
+            }
+          ],
+          "executions": [],
+          "selected": null
+        }
+      },
+      {
+        "action": "ensure:1",
+        "outcome": "ENSURED",
+        "state": {
+          "now": 0,
+          "attempts": [
+            {
+              "epoch": 1,
+              "fence": 1,
+              "until": 1,
+              "retired": false,
+              "intent": true
+            }
+          ],
+          "executions": [],
+          "selected": null
+        }
+      },
+      {
+        "action": "ensure:1",
+        "outcome": "ENSURED",
+        "state": {
+          "now": 0,
+          "attempts": [
+            {
+              "epoch": 1,
+              "fence": 1,
+              "until": 1,
+              "retired": false,
+              "intent": true
+            }
+          ],
+          "executions": [],
+          "selected": null
+        }
+      },
+      {
+        "action": "renew:1",
+        "outcome": "RENEWED",
+        "state": {
+          "now": 0,
+          "attempts": [
+            {
+              "epoch": 1,
+              "fence": 1,
+              "until": 2,
+              "retired": false,
+              "intent": true
+            }
+          ],
+          "executions": [],
+          "selected": null
+        }
+      },
+      {
+        "action": "tick",
+        "outcome": "TIME_ADVANCED",
+        "state": {
+          "now": 1,
+          "attempts": [
+            {
+              "epoch": 1,
+              "fence": 1,
+              "until": 2,
+              "retired": false,
+              "intent": true
+            }
+          ],
+          "executions": [],
+          "selected": null
+        }
+      },
+      {
+        "action": "renew:1",
+        "outcome": "RENEWED",
+        "state": {
+          "now": 1,
+          "attempts": [
+            {
+              "epoch": 1,
+              "fence": 1,
+              "until": 3,
+              "retired": false,
+              "intent": true
+            }
+          ],
+          "executions": [],
+          "selected": null
+        }
+      },
+      {
+        "action": "launch:1",
+        "outcome": "LAUNCHED",
+        "state": {
+          "now": 1,
+          "attempts": [
+            {
+              "epoch": 1,
+              "fence": 1,
+              "until": 3,
+              "retired": false,
+              "intent": true
+            }
+          ],
+          "executions": [
+            {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1,
+              "done": false
+            }
+          ],
+          "selected": null
+        }
+      },
+      {
+        "action": "tick",
+        "outcome": "TIME_ADVANCED",
+        "state": {
+          "now": 2,
+          "attempts": [
+            {
+              "epoch": 1,
+              "fence": 1,
+              "until": 3,
+              "retired": false,
+              "intent": true
+            }
+          ],
+          "executions": [
+            {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1,
+              "done": false
+            }
+          ],
+          "selected": null
+        }
+      },
+      {
+        "action": "renew:1",
+        "outcome": "RENEWED",
+        "state": {
+          "now": 2,
+          "attempts": [
+            {
+              "epoch": 1,
+              "fence": 1,
+              "until": 3,
+              "retired": false,
+              "intent": true
+            }
+          ],
+          "executions": [
+            {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1,
+              "done": false
+            }
+          ],
+          "selected": null
+        }
+      },
+      {
+        "action": "tick",
+        "outcome": "TIME_ADVANCED",
+        "state": {
+          "now": 3,
+          "attempts": [
+            {
+              "epoch": 1,
+              "fence": 1,
+              "until": 3,
+              "retired": true,
+              "intent": true
+            }
+          ],
+          "executions": [
+            {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1,
+              "done": false
+            }
+          ],
+          "selected": null
+        }
+      },
+      {
+        "action": "ensure:1",
+        "outcome": "ATTEMPT_EXPIRED",
+        "state": {
+          "now": 3,
+          "attempts": [
+            {
+              "epoch": 1,
+              "fence": 1,
+              "until": 3,
+              "retired": true,
+              "intent": true
+            }
+          ],
+          "executions": [
+            {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1,
+              "done": false
+            }
+          ],
+          "selected": null
+        }
+      },
+      {
+        "action": "complete:1-1",
+        "outcome": "COMPLETED",
+        "state": {
+          "now": 3,
+          "attempts": [
+            {
+              "epoch": 1,
+              "fence": 1,
+              "until": 3,
+              "retired": true,
+              "intent": true
+            }
+          ],
+          "executions": [
+            {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1,
+              "done": true
+            }
+          ],
+          "selected": null
+        }
+      },
+      {
+        "action": "select:1-1",
+        "outcome": "REJECTED",
+        "state": {
+          "now": 3,
+          "attempts": [
+            {
+              "epoch": 1,
+              "fence": 1,
+              "until": 3,
+              "retired": true,
+              "intent": true
+            }
+          ],
+          "executions": [
+            {
+              "id": "1-1",
+              "epoch": 1,
+              "fence": 1,
+              "done": true
+            }
+          ],
+          "selected": null
+        }
+      }
+    ]
+  }
+]

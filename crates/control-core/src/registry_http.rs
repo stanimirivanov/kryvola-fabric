@@ -8,7 +8,7 @@ use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 
 use crate::{
     authorization::{Authorizer, Denial, RegistryAction},
-    registry::{OperationIntent, OperationKey, Registry, RegistryError},
+    registry::{ExecutionTarget, OperationIntent, OperationKey, Registry, RegistryError},
     runtime_contract::{RuntimeCode, RuntimeValidator},
     wire::ControlValidator,
 };
@@ -58,7 +58,14 @@ impl RegistryApi {
     }
 
     pub fn matches(method: &Method, path: &str) -> bool {
-        (*method == Method::POST && matches!(path, "/v1/operations" | "/v1/attempts/ensure"))
+        (*method == Method::POST
+            && matches!(
+                path,
+                "/v1/operations"
+                    | "/v1/attempts/ensure"
+                    | "/v1/executions/register"
+                    | "/v1/results/select"
+            ))
             || (*method == Method::GET && path.starts_with("/v1/operations/"))
     }
 
@@ -74,12 +81,12 @@ impl RegistryApi {
             return error(RuntimeCode::NotFound, StatusCode::NOT_FOUND);
         }
         let (peer, auth, token) = authorization;
-        let action = if *method == Method::GET {
-            RegistryAction::GetOperation
-        } else if path == "/v1/operations" {
-            RegistryAction::CreateOperation
-        } else {
-            RegistryAction::EnsureAttempt
+        let action = match (*method == Method::GET, path) {
+            (true, _) => RegistryAction::GetOperation,
+            (_, "/v1/operations") => RegistryAction::CreateOperation,
+            (_, "/v1/executions/register") => RegistryAction::ExecutionRegister,
+            (_, "/v1/results/select") => RegistryAction::ResultSelect,
+            _ => RegistryAction::EnsureAttempt,
         };
         let Some(token) = token else {
             Denial::Credential.audit();
@@ -92,7 +99,7 @@ impl RegistryApi {
             tenant_scope: &scope.tenant_scope,
             operation_id: &scope.operation_id,
         };
-        let result: Result<(Value, &str), RegistryError> = async {
+        let result: Result<(Value, Option<&str>), RegistryError> = async {
             if action == RegistryAction::GetOperation {
                 if !bytes.is_empty() {
                     return Err(RegistryError::InvalidIntent);
@@ -111,13 +118,14 @@ impl RegistryApi {
                 return Ok((
                     json!({"schema_version":"1", "operation":saved.operation,
                     "public_status": self.registry.public_status(key).await?}),
-                    "OperationResponse",
+                    Some("OperationResponse"),
                 ));
             }
-            let schema = if action == RegistryAction::CreateOperation {
-                "CreateOperationRequest"
-            } else {
-                "EnsureAttemptRequest"
+            let schema = match action {
+                RegistryAction::CreateOperation => "CreateOperationRequest",
+                RegistryAction::ExecutionRegister => "RegisterExecutionRequest",
+                RegistryAction::ResultSelect => "SelectResultRequest",
+                _ => "EnsureAttemptRequest",
             };
             let body = schemas
                 .decode(schema, bytes)
@@ -133,6 +141,40 @@ impl RegistryApi {
             {
                 return Err(RegistryError::StaleWorkflow);
             }
+            if matches!(action, RegistryAction::ExecutionRegister | RegistryAction::ResultSelect) {
+                if identity["attempt_epoch"].as_str() != scope.attempt_epoch.as_deref()
+                    || identity["fence"].as_str() != scope.fence.as_deref()
+                {
+                    return Err(RegistryError::StaleWorkflow);
+                }
+                let number = |field: &str| -> Result<u64, RegistryError> {
+                    identity[field].as_str().and_then(|s| s.parse().ok()).ok_or(RegistryError::InvalidIntent)
+                };
+                let saved;
+                let (plan, policy) = if action == RegistryAction::ExecutionRegister {
+                    (&body["plan_digest"], &body["policy_digest"])
+                } else {
+                    saved = self.registry.lookup_operation(key).await?.ok_or(RegistryError::NotFound)?;
+                    (&saved.operation["plan_ref"]["plan_digest"], &saved.operation["policy_digest"])
+                };
+                let target = ExecutionTarget {
+                    workflow_epoch: number("workflow_epoch")?,
+                    attempt_epoch: number("attempt_epoch")?,
+                    fence: number("fence")?,
+                    execution_id: body["execution_id"].as_str().ok_or(RegistryError::InvalidIntent)?,
+                    plan_digest: plan.as_str().ok_or(RegistryError::InvalidIntent)?,
+                    policy_digest: policy.as_str().ok_or(RegistryError::InvalidIntent)?,
+                };
+                if action == RegistryAction::ExecutionRegister {
+                    self.registry.register_execution(key, target).await?;
+                    return Ok((Value::Null, None));
+                }
+                let digest = body["output_manifest_digest"].as_str().ok_or(RegistryError::InvalidIntent)?;
+                let selected = self.registry.select_by_digest(key, target, digest).await?;
+                return Ok((json!({"schema_version":"1","outcome":"COMPUTE_SELECTED",
+                    "execution_id":selected.execution_id,"output_manifest_digest":selected.manifest_digest}),
+                    Some("SelectResultResponse")));
+            }
             if action == RegistryAction::CreateOperation {
                 let inputs = serde_json::from_value(body["input_manifest_digests"].clone())
                     .map_err(|_| RegistryError::InvalidIntent)?;
@@ -142,7 +184,7 @@ impl RegistryApi {
                 Ok((
                     json!({"schema_version":"1", "operation":saved.operation,
                     "public_status": self.registry.public_status(key).await?}),
-                    "OperationResponse",
+                    Some("OperationResponse"),
                 ))
             } else {
                 let epoch = body["attempt"]["attempt_epoch"]
@@ -159,13 +201,16 @@ impl RegistryApi {
                 Ok((
                     json!({"schema_version":"1", "attempt":attempt,
                     "lease_expires_unix_ms":lease.expires_unix_ms.to_string()}),
-                    "EnsureAttemptResponse",
+                    Some("EnsureAttemptResponse"),
                 ))
             }
         }
         .await;
         match result {
-            Ok((body, schema)) if schemas.decode(schema, body.to_string().as_bytes()).is_ok() => {
+            Ok((_, None)) => (StatusCode::NO_CONTENT, String::new()),
+            Ok((body, Some(schema)))
+                if schemas.decode(schema, body.to_string().as_bytes()).is_ok() =>
+            {
                 (StatusCode::OK, body.to_string())
             }
             Ok(_) | Err(RegistryError::Unavailable) => {
