@@ -115,6 +115,9 @@ pub enum RegistryAction {
     EnsureAttempt,
     ExecutionRegister,
     ResultSelect,
+    CancelOperation,
+    AdminCancel,
+    AdminRecovery,
 }
 
 #[derive(Deserialize)]

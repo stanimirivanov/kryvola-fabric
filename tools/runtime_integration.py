@@ -391,6 +391,7 @@ def check_registry_http(folder: Path, invoke: Invoke) -> None:
     test = "test_authenticated_durable_operation_and_attempt_routes"
     if (
         result.returncode
+        or "FENCING_HTTP_PASSED" not in result.stdout.splitlines()
         or f"{test} (live_registry.RegistryHttpTests.{test}) ... ok" not in result.stderr
         or "Ran 1 test" not in result.stderr
         or not result.stderr.rstrip().endswith("OK")

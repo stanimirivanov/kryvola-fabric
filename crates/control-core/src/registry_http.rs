@@ -8,7 +8,9 @@ use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 
 use crate::{
     authorization::{Authorizer, Denial, RegistryAction},
-    registry::{ExecutionTarget, OperationIntent, OperationKey, Registry, RegistryError},
+    registry::{
+        Cancellation, ExecutionTarget, OperationIntent, OperationKey, Registry, RegistryError,
+    },
     runtime_contract::{RuntimeCode, RuntimeValidator},
     wire::ControlValidator,
 };
@@ -65,6 +67,9 @@ impl RegistryApi {
                     | "/v1/attempts/ensure"
                     | "/v1/executions/register"
                     | "/v1/results/select"
+                    | "/v1/operations/cancel"
+                    | "/v1/admin/operations/cancel"
+                    | "/v1/admin/operations/fence-recovery"
             ))
             || (*method == Method::GET && path.starts_with("/v1/operations/"))
     }
@@ -86,6 +91,9 @@ impl RegistryApi {
             (_, "/v1/operations") => RegistryAction::CreateOperation,
             (_, "/v1/executions/register") => RegistryAction::ExecutionRegister,
             (_, "/v1/results/select") => RegistryAction::ResultSelect,
+            (_, "/v1/operations/cancel") => RegistryAction::CancelOperation,
+            (_, "/v1/admin/operations/cancel") => RegistryAction::AdminCancel,
+            (_, "/v1/admin/operations/fence-recovery") => RegistryAction::AdminRecovery,
             _ => RegistryAction::EnsureAttempt,
         };
         let Some(token) = token else {
@@ -120,6 +128,37 @@ impl RegistryApi {
                     "public_status": self.registry.public_status(key).await?}),
                     Some("OperationResponse"),
                 ));
+            }
+            if matches!(action, RegistryAction::CancelOperation | RegistryAction::AdminCancel | RegistryAction::AdminRecovery) {
+                let recovery = action == RegistryAction::AdminRecovery;
+                let schema = if recovery { "FenceRecoveryRequest" } else { "CancelOperationRequest" };
+                let body = schemas.decode(schema, bytes).map_err(|_| RegistryError::InvalidIntent)?;
+                if body["tenant_scope"] != scope.tenant_scope
+                    || body["operation_id"] != scope.operation_id
+                    || (recovery && body["workflow_epoch"] != scope.workflow_epoch)
+                {
+                    return Err(RegistryError::StaleWorkflow);
+                }
+                let workflow = scope.workflow_epoch.parse().map_err(|_| RegistryError::InvalidIntent)?;
+                if recovery {
+                    let barrier = self.registry.fence_for_recovery(key, workflow).await.map_err(|error| {
+                        if error == RegistryError::StaleWorkflow { RegistryError::EpochConflict } else { error }
+                    })?;
+                    return Ok((json!({"schema_version":"1", "outcome":"RECOVERY_FENCED",
+                        "fence":barrier.fence.to_string(), "successor_epoch":barrier.successor_epoch.to_string()}),
+                        Some("RecoveryFenceResponse")));
+                }
+                let id = body["idempotency_key"].as_str().ok_or(RegistryError::InvalidIntent)?;
+                return Ok(match self.registry.cancel(key, Some(workflow), id).await? {
+                    Cancellation::Pending => (
+                        json!({"schema_version":"1", "outcome":"CANCELLATION_PENDING"}),
+                        Some("CancellationPending"),
+                    ),
+                    Cancellation::Cancelled { fence } => (
+                        json!({"schema_version":"1", "outcome":"CANCELLED", "fence":fence.to_string()}),
+                        Some("Cancelled"),
+                    ),
+                });
             }
             let schema = match action {
                 RegistryAction::CreateOperation => "CreateOperationRequest",
@@ -211,7 +250,12 @@ impl RegistryApi {
             Ok((body, Some(schema)))
                 if schemas.decode(schema, body.to_string().as_bytes()).is_ok() =>
             {
-                (StatusCode::OK, body.to_string())
+                let status = if schema == "CancellationPending" {
+                    StatusCode::ACCEPTED
+                } else {
+                    StatusCode::OK
+                };
+                (status, body.to_string())
             }
             Ok(_) | Err(RegistryError::Unavailable) => {
                 error(RuntimeCode::Unavailable, StatusCode::SERVICE_UNAVAILABLE)
