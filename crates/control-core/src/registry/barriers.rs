@@ -82,14 +82,31 @@ impl Registry {
         key: OperationKey<'_>,
         idempotency_key: &str,
     ) -> Result<Cancellation> {
-        match self.commit_cancel(key, idempotency_key).await {
+        self.cancel(key, None, idempotency_key).await
+    }
+
+    pub(crate) async fn cancel(
+        &self,
+        key: OperationKey<'_>,
+        workflow_epoch: Option<u64>,
+        idempotency_key: &str,
+    ) -> Result<Cancellation> {
+        match self
+            .commit_cancel(key, workflow_epoch, idempotency_key)
+            .await
+        {
             Ok(fence) => Ok(Cancellation::Cancelled { fence }),
             Err(RegistryError::Unavailable) => Ok(Cancellation::Pending),
             Err(error) => Err(error),
         }
     }
 
-    async fn commit_cancel(&self, key: OperationKey<'_>, idempotency_key: &str) -> Result<u64> {
+    async fn commit_cancel(
+        &self,
+        key: OperationKey<'_>,
+        workflow_epoch: Option<u64>,
+        idempotency_key: &str,
+    ) -> Result<u64> {
         let id = idempotency_key.as_bytes();
         if id.len() > 128
             || !id.first().is_some_and(u8::is_ascii_alphanumeric)
@@ -100,7 +117,10 @@ impl Registry {
             return Err(RegistryError::InvalidIntent);
         }
         let mut tx = self.pool.begin().await?;
-        lock(&mut tx, key).await?;
+        let stored_workflow = lock(&mut tx, key).await?;
+        if workflow_epoch.is_some_and(|epoch| epoch != stored_workflow) {
+            return Err(RegistryError::StaleWorkflow);
+        }
         let fence = if let Some(row) = read(&mut tx, key).await? {
             let fence = read_u64(&row, "fence")?;
             if let Some(saved) = row.try_get::<Option<&str>, _>("cancel_key")? {

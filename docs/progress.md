@@ -411,8 +411,22 @@ higher fence. This records quarantine only. Successor admission requires later
 reconciliation and explicit workflow authorization. Cancellation can supersede
 the recovery barrier, while a cancelled operation cannot enter recovery.
 Committed selection and its pin remain as history. Future release handlers must
-check the barrier under the operation lock. Public authentication and Temporal
-cleanup remain separate slices.
+check the barrier under the operation lock.
+
+M1-PR10-R1 exposes the three pinned fencing routes through the bounded SPIFFE
+registry runtime. The policy assigns `CANCEL_OPERATION`, `ADMIN_CANCEL` and
+`ADMIN_RECOVERY` as independent actions. Each grant binds tenant, operation and
+workflow epoch. Cancellation takes its epoch from the grant and validates it
+under the operation lock. Recovery validates the epoch from both request and
+grant and allocates the successor from the stored epoch with checked arithmetic.
+
+A committed cancellation returns 200 with the fence. PostgreSQL uncertainty
+returns 202 `CANCELLATION_PENDING` for either cancellation route and 503
+`UNAVAILABLE` for recovery. Callers can retry cancellation with the original
+idempotency key. F-live verifies role and scope separation, rollback on a deferred
+commit failure, database outage responses, stable fences on retry, and successor
+epoch exhaustion. The administrative cancellation response supplies the durable
+barrier for callers to use before invoking Temporal termination.
 
 ## M1-PR11 artifact retention and reclamation
 
