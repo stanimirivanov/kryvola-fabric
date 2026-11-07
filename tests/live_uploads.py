@@ -18,6 +18,7 @@ from typing import Any
 from urllib.parse import quote
 
 from finalization_recovery import exercise as recover_finalization
+from selection_trace import exercise as exercise_selection
 from upload_campaign import exercise
 
 from tools.spire_fixture import spire
@@ -101,6 +102,7 @@ class UploadHttpTests(unittest.TestCase):
                 tenant = operation["tenant_scope"]
                 coordinator = "f" * 64
                 grants = []
+                selection_grants = []
                 counter = 0
 
                 def publish():
@@ -113,12 +115,13 @@ class UploadHttpTests(unittest.TestCase):
                                 "token_sha256": hashlib.sha256(coordinator.encode()).hexdigest(),
                                 "scope": {
                                     "tenant_scope": tenant,
-                                    "operation_id": "upload-http",
+                                    "operation_id": operation["operation_id"],
                                     "workflow_epoch": operation["workflow_epoch"],
                                 },
-                                "actions": ["CREATE_OPERATION", "ENSURE_ATTEMPT"],
+                                "actions": ["CREATE_OPERATION", "ENSURE_ATTEMPT", "GET_OPERATION"],
                                 "expires_unix_ms": time.time_ns() // 1_000_000 + 45_000,
-                            }
+                            },
+                            *selection_grants,
                         ],
                     }
                     path = folder / "policy.next"
@@ -189,6 +192,12 @@ class UploadHttpTests(unittest.TestCase):
                     name="coordinator",
                 )
                 self.assertEqual(status, 200)
+                self.assertEqual(
+                    request("POST", "/v1/executions/register", coordinator, {}, name="coordinator")[
+                        0
+                    ],
+                    403,
+                )
                 corpus = json.loads(
                     (ROOT / "contracts/spec/fixtures/canonical-modular-v2.json").read_text()
                 )["objects"][0]
@@ -482,6 +491,45 @@ class UploadHttpTests(unittest.TestCase):
                         "code"
                     ],
                     "ATTEMPT_EXPIRED",
+                )
+
+                def authorize_selection(attempt, actions=("EXECUTION_REGISTER", "RESULT_SELECT")):
+                    nonlocal counter
+                    counter += 1
+                    token = f"{counter:064x}"
+                    selection_grants[:] = [
+                        {
+                            "spiffe_id": "spiffe://fabric.test/coordinator",
+                            "token_sha256": hashlib.sha256(token.encode()).hexdigest(),
+                            "scope": {
+                                key: value
+                                for key, value in attempt.items()
+                                if key != "schema_version"
+                            },
+                            "actions": list(actions),
+                            "expires_unix_ms": time.time_ns() // 1_000_000 + 45_000,
+                        }
+                    ]
+                    publish()
+                    return token
+
+                operation.update(
+                    operation_id="selection-http",
+                    idempotency_key="selection-http",
+                    deadline_unix_ms=str(time.time_ns() // 1_000_000 + 120_000),
+                )
+                configure(endpoint)
+                restart()
+                exercise_selection(
+                    self,
+                    request,
+                    issue,
+                    sql,
+                    operation,
+                    scope,
+                    coordinator,
+                    authorize_selection,
+                    manifest,
                 )
                 records = sql("SELECT scope::text FROM fabric_uploads")
                 for secret in (

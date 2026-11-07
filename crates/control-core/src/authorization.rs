@@ -103,6 +103,8 @@ pub struct RegistryScope {
     pub tenant_scope: String,
     pub operation_id: String,
     pub workflow_epoch: String,
+    pub attempt_epoch: Option<String>,
+    pub fence: Option<String>,
 }
 
 #[derive(Deserialize, PartialEq, Eq, Clone, Copy)]
@@ -111,6 +113,8 @@ pub enum RegistryAction {
     CreateOperation,
     GetOperation,
     EnsureAttempt,
+    ExecutionRegister,
+    ResultSelect,
 }
 
 #[derive(Deserialize)]
@@ -307,6 +311,23 @@ impl Authorizer {
                 || !identifier(&grant.scope.tenant_scope)
                 || !identifier(&grant.scope.operation_id)
                 || !decimal(&grant.scope.workflow_epoch)
+                || match (
+                    grant.scope.attempt_epoch.as_deref(),
+                    grant.scope.fence.as_deref(),
+                ) {
+                    (Some(epoch), Some(fence)) => {
+                        !matches!(
+                            action,
+                            RegistryAction::ExecutionRegister | RegistryAction::ResultSelect
+                        ) || !decimal(epoch)
+                            || !decimal(fence)
+                    }
+                    (None, None) => matches!(
+                        action,
+                        RegistryAction::ExecutionRegister | RegistryAction::ResultSelect
+                    ),
+                    _ => true,
+                }
             {
                 return Err(Denial::Policy);
             }

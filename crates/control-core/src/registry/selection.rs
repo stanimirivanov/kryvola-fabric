@@ -151,16 +151,36 @@ impl Registry {
         upload_id: &str,
         manifest_digest: &str,
     ) -> Result<SelectedResult> {
+        self.select_candidate(key, target, Some(upload_id), manifest_digest)
+            .await
+    }
+
+    pub(crate) async fn select_by_digest(
+        &self,
+        key: OperationKey<'_>,
+        target: ExecutionTarget<'_>,
+        manifest_digest: &str,
+    ) -> Result<SelectedResult> {
+        self.select_candidate(key, target, None, manifest_digest)
+            .await
+    }
+
+    async fn select_candidate(
+        &self,
+        key: OperationKey<'_>,
+        target: ExecutionTarget<'_>,
+        upload_id: Option<&str>,
+        manifest_digest: &str,
+    ) -> Result<SelectedResult> {
         let mut tx = self.pool.begin().await?;
         let context = lock_context(&mut tx, key, target).await?;
-        let result = SelectedResult {
-            execution_id: target.execution_id.to_owned(),
-            attempt_epoch: target.attempt_epoch,
-            upload_id: upload_id.to_owned(),
-            manifest_digest: manifest_digest.to_owned(),
-        };
         if let Some(saved) = read_selection(&mut *tx, key).await? {
-            return if saved == result && target.fence == saved.attempt_epoch {
+            return if saved.execution_id == target.execution_id
+                && saved.attempt_epoch == target.attempt_epoch
+                && saved.manifest_digest == manifest_digest
+                && upload_id.is_none_or(|id| id == saved.upload_id)
+                && target.fence == saved.attempt_epoch
+            {
                 Ok(saved)
             } else {
                 Err(RegistryError::SelectionConflict)
@@ -172,16 +192,6 @@ impl Registry {
         }
 
         // Serialize the artifact pin with reclamation. Keep the operation -> upload lock order.
-        let reclaiming: Option<bool> = sqlx::query_scalar(
-            "SELECT reclaiming FROM fabric_uploads WHERE id = $1 AND tenant_scope = $2 FOR UPDATE",
-        )
-        .bind(upload_id)
-        .bind(key.tenant_scope)
-        .fetch_optional(&mut *tx)
-        .await?;
-        if reclaiming != Some(false) {
-            return Err(RegistryError::CandidateMismatch);
-        }
         let scope = serde_json::json!({
             "manifest_digest": manifest_digest, "purpose": "COMPUTE_WRITE",
             "attempt": {
@@ -191,17 +201,20 @@ impl Registry {
                 "fence": target.fence.to_string(),
             }
         });
-        let candidate: bool = sqlx::query_scalar(
-            "SELECT EXISTS (
-                 SELECT 1 FROM fabric_finalized_artifacts a JOIN fabric_uploads u ON u.id = a.upload_id
-                 WHERE u.id = $1 AND u.tenant_scope = $2 AND a.manifest_digest = $3
-                   AND u.scope @> $4 AND convert_from(a.canonical_manifest, 'UTF8')::jsonb->>'key_context_digest' = $5
-             )",
+        let upload_id: String = sqlx::query_scalar(
+            "SELECT u.id FROM fabric_finalized_artifacts a JOIN fabric_uploads u ON u.id = a.upload_id
+             WHERE ($1::text IS NULL OR u.id = $1) AND u.tenant_scope = $2
+               AND a.manifest_digest = $3 AND u.scope @> $4 AND NOT u.reclaiming
+               AND convert_from(a.canonical_manifest, 'UTF8')::jsonb->>'key_context_digest' = $5
+             ORDER BY u.id LIMIT 1 FOR UPDATE OF u",
         ).bind(upload_id).bind(key.tenant_scope).bind(manifest_digest).bind(Json(scope)).bind(context)
-            .fetch_one(&mut *tx).await?;
-        if !candidate {
-            return Err(RegistryError::CandidateMismatch);
-        }
+            .fetch_optional(&mut *tx).await?.ok_or(RegistryError::CandidateMismatch)?;
+        let result = SelectedResult {
+            execution_id: target.execution_id.to_owned(),
+            attempt_epoch: target.attempt_epoch,
+            upload_id,
+            manifest_digest: manifest_digest.to_owned(),
+        };
 
         let inserted = sqlx::query(
             "INSERT INTO fabric_selected_results (tenant_scope, operation_id, execution_id, upload_id)
@@ -211,7 +224,7 @@ impl Registry {
                AND a.fence = $5::text::numeric AND NOT a.retired
                AND a.lease_expires_unix_ms > floor(extract(epoch FROM clock_timestamp()) * 1000)
              ON CONFLICT DO NOTHING",
-        ).bind(key.tenant_scope).bind(key.operation_id).bind(target.execution_id).bind(upload_id)
+        ).bind(key.tenant_scope).bind(key.operation_id).bind(target.execution_id).bind(&result.upload_id)
             .bind(target.fence.to_string()).execute(&mut *tx).await?;
         if inserted.rows_affected() != 1 {
             let status = require_live(&mut tx, key, target).await;

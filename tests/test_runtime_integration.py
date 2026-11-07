@@ -191,7 +191,7 @@ class RuntimeFixtureTests(unittest.TestCase):
         test = "test_scoped_streaming_reservation_manifest_and_abort"
         valid = f"{test} (live_uploads.UploadHttpTests.{test}) ... ok\nRan 1 test\nOK"
         previous = "UPLOAD_FAILURE_CAMPAIGN_PASSED\nVERIFIED_FINALIZATION_HTTP_PASSED"
-        markers = previous + "\nFINALIZATION_RECOVERY_PASSED"
+        markers = previous + "\nFINALIZATION_RECOVERY_PASSED\nFENCED_SELECTION_TRACE_PASSED"
         boundaries = (
             "fresh-race",
             "before",
@@ -215,6 +215,7 @@ class RuntimeFixtureTests(unittest.TestCase):
             (0, "", valid),
             (0, previous, valid),
             (0, markers, valid),
+            (0, proof.replace("FENCED_SELECTION_TRACE_PASSED", ""), valid),
             (0, proof.replace("Finalization boundary passed: commit", ""), valid),
             (0, "UPLOAD_FAILURE_CAMPAIGN_PASSED", valid),
             (0, "VERIFIED_FINALIZATION_HTTP_PASSED", valid),

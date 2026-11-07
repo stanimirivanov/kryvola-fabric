@@ -372,8 +372,31 @@ inserts the winner.
 
 The single selection row pins the finalized artifact through a foreign key.
 A matching retry and lookup return the winner after lease expiry. Conflicting
-candidates and new attempts cannot replace it. The selection remains internal
-metadata. Cancellation, release and public transport wiring are later slices.
+candidates and new attempts cannot replace it.
+
+M1-PR9-R2 exposes registration and selection through the pinned HTTP DTOs.
+The local coordinator policy uses separate `EXECUTION_REGISTER` and
+`RESULT_SELECT` actions with exact tenant, operation, workflow epoch, attempt
+epoch and fence. Registration compares plan and policy digests with the stored
+operation. For a digest-only selection, the transaction chooses the first
+eligible upload ID in sorted order. Eligible copies share the same committed
+manifest and exact attempt/key context. The coordinator attests which execution
+produced the content. The winner row supplies the durable retention pin and
+the selection outbox event commits in the same transaction.
+
+F-live checks a real HTTPS race and a PostgreSQL trace against the attempts graph
+from Spec merge commit `56835dfbc912e2049751ca25d414f22e6ec578a1`, imported
+through Fabric's Git provenance check. The fixture retains raw attempt, execution,
+artifact and winner observations alongside its normalized v1 trace in ignored
+`build/selection-trace.json`. Each successful ensure projects the model's
+authorization and ensure steps. Registration projects launch, and finalized
+metadata completes the execution identified by the test driver. The driver
+preserves execution IDs and numeric fences, projects a pending dispatch intent
+at ensure, and advances one logical tick at each forced PostgreSQL lease expiry.
+For the race, the committed winner determines the linearization order. Separate
+HTTP assertions cover scope, plan, policy, digest and context rejections outside
+the finite graph's action vocabulary. The graph checks bounded state transitions,
+and the trace records the fixture's dispatch and clock assumptions.
 
 ## M1-PR10 cancellation and recovery barriers
 

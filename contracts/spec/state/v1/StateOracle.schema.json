@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "format": {
+      "type": "string",
+      "enum": [
+        "kryvola-state-oracle-v1"
+      ]
+    },
+    "purpose": {
+      "type": "string",
+      "enum": [
+        "BOUNDED_MODEL_TEST_ONLY"
+      ]
+    },
+    "model": {
+      "type": "string",
+      "enum": [
+        "attempts",
+        "release"
+      ]
+    },
+    "source_sha256": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+      }
+    },
+    "bounds": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 100000
+      }
+    },
+    "initial": {
+      "type": "number",
+      "enum": [
+        0
+      ]
+    },
+    "actions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "maxItems": 256
+    },
+    "outcomes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "maxItems": 256
+    },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "state": {},
+          "edges": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100000
+                },
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100000
+                },
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100000
+                }
+              ],
+              "maxItems": 3,
+              "minItems": 3
+            },
+            "maxItems": 256
+          }
+        },
+        "required": [
+          "state",
+          "edges"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 100000
+    }
+  },
+  "required": [
+    "format",
+    "purpose",
+    "model",
+    "source_sha256",
+    "bounds",
+    "initial",
+    "actions",
+    "outcomes",
+    "nodes"
+  ],
+  "additionalProperties": false
+}
