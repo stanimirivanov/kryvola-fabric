@@ -17,7 +17,7 @@ rdkafka = { version = "=0.39.0", default-features = false, features = ["ssl-vend
 serde = { version = "=1.0.229", features = ["derive"] }
 tokio-rustls = { version = "=0.26.6", default-features = false, features = ["ring"] }
 axum = { version = "=0.8.8", default-features = false, features = ["http1", "tokio"] }
-tokio = { version = "=1.54.1", features = ["io-util", "macros", "net", "rt", "time"] }
+tokio = { version = "=1.54.1", features = ["io-util", "macros", "net", "rt", "signal", "time"] }
 prost = "=0.14.4"
 prost-reflect = { version = "=0.16.5", features = ["serde"] }
 jsonschema = { version = "=0.60.1", default-features = false }

@@ -1242,3 +1242,6 @@ async fn bounded_reclamation_maintenance() {
         assert!(objects.head(&key(pinned, prefix)).await.is_ok());
     }
 }
+
+#[path = "registry/messaging.rs"]
+mod messaging;
