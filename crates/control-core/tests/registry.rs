@@ -1245,3 +1245,6 @@ async fn bounded_reclamation_maintenance() {
 
 #[path = "registry/messaging.rs"]
 mod messaging;
+
+#[path = "registry/broker_crash.rs"]
+mod broker_crash;
