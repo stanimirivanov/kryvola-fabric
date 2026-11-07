@@ -19,7 +19,7 @@ use crate::{
     limits::{ARTIFACT_MAX_BYTES, CHUNK_MAX_BYTES},
 };
 pub use finalize::FinalizedArtifact;
-pub use retention::PinKind;
+pub use retention::{PinKind, ReclaimReport};
 
 const IO_TIMEOUT: Duration = Duration::from_secs(15);
 type Result<T> = std::result::Result<T, UploadError>;
@@ -175,6 +175,17 @@ impl UploadStore {
             "INSERT INTO fabric_uploads (id, tenant_scope, certificate, scope, reserved_bytes) VALUES ($1, $2, $3, $4, $5)",
         ).bind(&id).bind(&permit.tenant).bind(&permit.certificate).bind(Json(&permit.scope))
             .bind(bytes).execute(&mut *tx).await?;
+        // Check after inserting, so a concurrent deletion of a colliding live
+        // upload cannot make its tombstoned identity available for reuse.
+        let tombstoned: bool = sqlx::query_scalar(
+            "SELECT EXISTS (SELECT 1 FROM fabric_reclaim_tombstones WHERE id=$1)",
+        )
+        .bind(&id)
+        .fetch_one(&mut *tx)
+        .await?;
+        if tombstoned {
+            return Err(UploadError::Unavailable);
+        }
         tx.commit().await?;
         Ok(id)
     }

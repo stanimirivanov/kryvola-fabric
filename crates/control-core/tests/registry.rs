@@ -243,10 +243,11 @@ async fn bounded_uploads() {
     Registry::new(pool.clone()).migrate().await.unwrap();
     // The down migration preserves schema/data but restores old SQLx-ledger compatibility.
     sqlx::migrate!().undo(&pool, 7).await.unwrap();
-    let version: i64 = sqlx::query_scalar("SELECT max(version) FROM _sqlx_migrations")
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let version: i64 =
+        sqlx::query_scalar("SELECT max(version) FROM _sqlx_migrations WHERE version <= 8")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(version, 7);
     Registry::new(pool.clone()).migrate().await.unwrap();
     let folder = PathBuf::from(std::env::var_os("FABRIC_FIXTURE_PG_SOCKET").unwrap());
@@ -949,3 +950,180 @@ async fn outbox_round_trip() {
 
 #[path = "registry/finalization.rs"]
 mod finalization;
+
+#[tokio::test]
+#[ignore = "requires PostgreSQL and S3 from the live gate"]
+async fn bounded_reclamation_maintenance() {
+    use object_store::{ObjectStoreExt, path::Path};
+    use std::{fs, path::PathBuf, process::Command};
+
+    let pool = PgPoolOptions::new()
+        .connect_with(fixture_options())
+        .await
+        .unwrap();
+    Registry::new(pool.clone()).migrate().await.unwrap();
+    let objects = fixture_objects();
+    let socket = PathBuf::from(std::env::var_os("FABRIC_FIXTURE_PG_SOCKET").unwrap());
+    let db = socket.with_file_name("reclaim-db");
+    let s3 = socket.with_file_name("reclaim-s3");
+    fs::write(
+        &db,
+        format!(
+            "postgresql://postgres@localhost/postgres?host={}",
+            socket.display()
+        ),
+    )
+    .unwrap();
+    fs::write(
+        &s3,
+        json!({
+            "endpoint": std::env::var("FABRIC_FIXTURE_S3_ENDPOINT").unwrap(),
+            "access_key_id": std::env::var("AWS_ACCESS_KEY_ID").unwrap(),
+            "secret_access_key": std::env::var("AWS_SECRET_ACCESS_KEY").unwrap(),
+            "bucket": "fabric-runtime", "region": "us-east-1",
+            "tenant_quota_bytes": 32, "allow_http": true
+        })
+        .to_string(),
+    )
+    .unwrap();
+
+    let run = |args: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_fabric-runtime"))
+            .arg("--reclaim")
+            .arg(&db)
+            .arg(&s3)
+            .arg("86400")
+            .args(args)
+            .output()
+            .unwrap()
+    };
+    let report = |args: &[&str]| {
+        let output = run(args);
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        serde_json::from_slice::<Value>(&output.stdout).unwrap()
+    };
+
+    let tenant = "maintenance-fixture";
+    sqlx::query("INSERT INTO fabric_upload_tenants VALUES ($1)")
+        .bind(tenant)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let ids: Vec<_> = (1..=11).map(|n| format!("{n:032x}")).collect();
+    let key = |id: &str, prefix: &str| Path::from(format!("{prefix}/{id}/probe"));
+    for (i, id) in ids.iter().enumerate() {
+        sqlx::query(
+            "INSERT INTO fabric_uploads
+            (id, tenant_scope, certificate, scope, reserved_bytes, touched_at, reclaiming)
+            VALUES ($1,$2,'fixture','{}',1,clock_timestamp() - interval '2 days',$3)",
+        )
+        .bind(id)
+        .bind(tenant)
+        .bind(i == 0)
+        .execute(&pool)
+        .await
+        .unwrap();
+        objects
+            .put(&key(id, "staging"), b"original".as_slice().into())
+            .await
+            .unwrap();
+    }
+    let pinned = ids.last().unwrap();
+    sqlx::query("INSERT INTO fabric_finalized_artifacts VALUES ($1,'fixture','')")
+        .bind(pinned)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query(
+        "INSERT INTO fabric_artifact_pins VALUES ($1,'audit','fixture',9223372036854775807)",
+    )
+    .bind(pinned)
+    .execute(&pool)
+    .await
+    .unwrap();
+    objects
+        .put(&key(pinned, "immutable"), b"pinned".as_slice().into())
+        .await
+        .unwrap();
+
+    let count = || async {
+        sqlx::query_scalar::<_, i64>("SELECT count(*) FROM fabric_uploads WHERE tenant_scope=$1")
+            .bind(tenant)
+            .fetch_one(&pool)
+            .await
+            .unwrap()
+    };
+    assert!(!run(&["--deleet"]).status.success());
+    let preview = report(&[]);
+    assert_eq!(preview["mode"], "report");
+    assert_eq!(preview["eligible_uploads"], 4);
+    assert_eq!(count().await, 11);
+    for id in &ids {
+        assert!(objects.head(&key(id, "staging")).await.is_ok());
+    }
+
+    // Inject a repeatable failure at SQL deletion. Subsequent candidates must
+    // still make progress, and a fresh invocation must resume the failed row.
+    sqlx::raw_sql(
+        "CREATE FUNCTION fail_fixture_maintenance() RETURNS trigger LANGUAGE plpgsql AS
+        $$ BEGIN IF OLD.id='00000000000000000000000000000001'
+        THEN RAISE EXCEPTION 'fixture cleanup failure'; END IF; RETURN OLD; END; $$;
+        CREATE TRIGGER fail_fixture_maintenance BEFORE DELETE ON fabric_uploads
+        FOR EACH ROW EXECUTE FUNCTION fail_fixture_maintenance()",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let failed = run(&["--delete"]);
+    assert!(!failed.status.success());
+    let progress: Value = serde_json::from_slice(&failed.stdout).unwrap();
+    assert_eq!(progress["failures"], 1);
+    assert_eq!(progress["reclaimed_uploads"], 3);
+    assert_eq!(count().await, 8);
+    let rotated = report(&["--delete"]);
+    assert_eq!(rotated["reclaimed_uploads"], 4);
+    assert_eq!(count().await, 4);
+
+    sqlx::query("DROP TRIGGER fail_fixture_maintenance ON fabric_uploads")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    for _ in 0..8 {
+        if count().await == 1 {
+            break;
+        }
+        let progress = report(&["--delete"]);
+        assert_eq!(progress["mode"], "delete");
+        assert!(progress["reclaimed_uploads"].as_u64().unwrap() <= 4);
+        assert!(progress["tombstones_swept"].as_u64().unwrap() <= 4);
+    }
+    assert_eq!(count().await, 1);
+
+    // Simulate requests that finish writing after metadata and quota were removed.
+    for prefix in ["staging", "immutable"] {
+        objects
+            .put(&key(&ids[0], prefix), b"late".as_slice().into())
+            .await
+            .unwrap();
+    }
+    assert!(report(&[])["tombstones_due"].as_u64().unwrap() > 0);
+    assert!(objects.head(&key(&ids[0], "staging")).await.is_ok());
+    for _ in 0..12 {
+        report(&["--delete"]);
+        if objects.head(&key(&ids[0], "staging")).await.is_err() {
+            break;
+        }
+    }
+    for prefix in ["staging", "immutable"] {
+        assert!(matches!(
+            objects.head(&key(&ids[0], prefix)).await,
+            Err(object_store::Error::NotFound { .. })
+        ));
+        assert!(objects.head(&key(pinned, prefix)).await.is_ok());
+    }
+}

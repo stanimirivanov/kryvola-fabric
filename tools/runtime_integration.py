@@ -579,6 +579,13 @@ def run(folder: Path) -> None:
         check_registry(
             folder, "outbox_round_trip", FABRIC_FIXTURE_KAFKA=env["FABRIC_FIXTURE_KAFKA"]
         )
+        check_registry(
+            folder,
+            "bounded_reclamation_maintenance",
+            FABRIC_FIXTURE_S3_ENDPOINT=f"http://{endpoint}",
+            AWS_ACCESS_KEY_ID=env["AWS_ACCESS_KEY_ID"],
+            AWS_SECRET_ACCESS_KEY=env["AWS_SECRET_ACCESS_KEY"],
+        )
     finally:
         require(
             invoke("down", "--volumes", "--remove-orphans", timeout=90),

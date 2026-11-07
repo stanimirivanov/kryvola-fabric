@@ -24,6 +24,27 @@ fn forbidden() -> Reply {
     error(RuntimeCode::Forbidden, StatusCode::FORBIDDEN)
 }
 
+pub async fn connect_pool(path: &str) -> Result<sqlx::PgPool, &'static str> {
+    async fn load(path: &str) -> Result<sqlx::PgPool, Box<dyn std::error::Error>> {
+        if !std::fs::metadata(path)?.is_file() {
+            return Err("invalid config".into());
+        }
+        let mut url = String::new();
+        File::open(path)?.take(4097).read_to_string(&mut url)?;
+        if url.len() > 4096 {
+            return Err("invalid config".into());
+        }
+        let options = PgConnectOptions::from_str(url.trim())?
+            .options([("statement_timeout", "2000"), ("lock_timeout", "1000")]);
+        Ok(PgPoolOptions::new()
+            .max_connections(8)
+            .acquire_timeout(Duration::from_secs(2))
+            .connect_with(options)
+            .await?)
+    }
+    load(path).await.map_err(|_| "registry unavailable")
+}
+
 pub struct RegistryApi {
     registry: Registry,
     control: ControlValidator,
@@ -34,21 +55,7 @@ impl RegistryApi {
     }
     pub async fn connect(path: &str) -> Result<Self, &'static str> {
         async fn load(path: &str) -> Result<RegistryApi, Box<dyn std::error::Error>> {
-            if !std::fs::metadata(path)?.is_file() {
-                return Err("invalid config".into());
-            }
-            let mut url = String::new();
-            File::open(path)?.take(4097).read_to_string(&mut url)?;
-            if url.len() > 4096 {
-                return Err("invalid config".into());
-            }
-            let options = PgConnectOptions::from_str(url.trim())?
-                .options([("statement_timeout", "2000"), ("lock_timeout", "1000")]);
-            let pool = PgPoolOptions::new()
-                .max_connections(8)
-                .acquire_timeout(Duration::from_secs(2))
-                .connect_with(options)
-                .await?;
+            let pool = connect_pool(path).await?;
             let registry = Registry::new(pool);
             registry.migrate().await.map_err(|_| "migration failed")?;
             Ok(RegistryApi {
