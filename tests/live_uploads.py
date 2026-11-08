@@ -20,6 +20,7 @@ from urllib.parse import quote
 from execution_receipts import exercise as exercise_receipts
 from fencing_race import exercise as exercise_fencing
 from finalization_recovery import exercise as recover_finalization
+from output_grants import exercise as exercise_output_grants
 from selection_trace import exercise as exercise_selection
 from upload_campaign import exercise
 
@@ -106,6 +107,7 @@ class UploadHttpTests(unittest.TestCase):
                 grants = []
                 selection_grants = []
                 receipt_grants = []
+                output_grants = []
                 counter = 0
 
                 def publish():
@@ -113,6 +115,7 @@ class UploadHttpTests(unittest.TestCase):
                         "boot_id": boot,
                         "grants": grants,
                         "receipt_grants": receipt_grants,
+                        "output_grants": output_grants,
                         "registry_grants": [
                             {
                                 "spiffe_id": "spiffe://fabric.test/coordinator",
@@ -138,7 +141,16 @@ class UploadHttpTests(unittest.TestCase):
                     tls.load_cert_chain(folder / f"{name}.pem", folder / f"{name}.key")
                     return http.client.HTTPSConnection("127.0.0.1", port, context=tls, timeout=12)
 
-                def request(method, path, token, body=None, *, name="worker", length=None):
+                def request(
+                    method,
+                    path,
+                    token,
+                    body=None,
+                    *,
+                    name="worker",
+                    length=None,
+                    capture_grant=False,
+                ):
                     conn = connect(name)
                     try:
                         conn.connect()
@@ -166,7 +178,15 @@ class UploadHttpTests(unittest.TestCase):
                             self.assertEqual(result.getheader("Content-Length"), str(len(raw)))
                             self.assertEqual(result.getheader("Cache-Control"), "no-store")
                             return result.status, raw
-                        return result.status, json.loads(raw) if raw else None
+                        decoded = json.loads(raw) if raw else None
+                        if capture_grant:
+                            return (
+                                result.status,
+                                decoded,
+                                result.getheader("Kryvola-Output-Grant"),
+                                result.getheader("Cache-Control"),
+                            )
+                        return result.status, decoded
                     finally:
                         conn.close()
 
@@ -212,6 +232,12 @@ class UploadHttpTests(unittest.TestCase):
                 )
                 self.assertEqual(
                     request("POST", "/v1/executions/receipt", coordinator, {}, name="coordinator"),
+                    (403, {"schema_version": "1", "code": "FORBIDDEN"}),
+                )
+                self.assertEqual(
+                    request(
+                        "POST", "/v1/executions/output-grants", coordinator, {}, name="coordinator"
+                    ),
                     (403, {"schema_version": "1", "code": "FORBIDDEN"}),
                 )
                 scope: dict[str, Any] = {
@@ -430,6 +456,19 @@ class UploadHttpTests(unittest.TestCase):
                     )[0],
                     400,
                 )
+                scoped_upload, check_fenced_output = exercise_output_grants(
+                    self,
+                    request,
+                    sql,
+                    operation,
+                    scope["attempt"],
+                    reserve,
+                    manifest,
+                    corpus["digest"],
+                    (selection_grants, output_grants),
+                    publish,
+                    issue,
+                )
                 check_expired_receipt = exercise_receipts(
                     self,
                     request,
@@ -440,6 +479,12 @@ class UploadHttpTests(unittest.TestCase):
                     selection_grants,
                     receipt_grants,
                     publish,
+                    scoped_upload,
+                )
+                # Keep the original artifact as the only eligible read in the corruption checks.
+                sql(
+                    f"DELETE FROM fabric_finalized_artifacts WHERE upload_id='{scoped_upload}'; "
+                    f"DELETE FROM fabric_uploads WHERE id='{scoped_upload}'"
                 )
                 read_path = "/v1/compute-inputs/manifest"
                 part_path = "/v1/compute-inputs/parts/0"
@@ -624,6 +669,7 @@ class UploadHttpTests(unittest.TestCase):
                 )
 
                 check_expired_receipt()
+                check_fenced_output()
 
                 def authorize_selection(attempt, actions=("EXECUTION_REGISTER", "RESULT_SELECT")):
                     nonlocal counter

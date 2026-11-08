@@ -74,6 +74,13 @@ async fn handle(
     uploads: Option<&UploadApi>,
 ) -> Response {
     if let (Some(authorization), Some(api)) = (peer, uploads)
+        && UploadApi::matches_output_grant(request.method(), request.uri().path())
+    {
+        return api
+            .handle_output_grant(request, authorization, runtime)
+            .await;
+    }
+    if let (Some(authorization), Some(api)) = (peer, uploads)
         && UploadApi::matches_read(request.method(), request.uri().path())
     {
         return api.handle_read(request, authorization, runtime).await;

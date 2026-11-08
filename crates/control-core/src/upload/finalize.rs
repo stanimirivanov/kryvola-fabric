@@ -158,6 +158,8 @@ impl UploadStore {
         let commitment = digest(b"kryvola/manifest/v2\0", &[canonical]);
         if manifest["tenant_scope"] != permit.tenant
             || permit.scope["manifest_digest"] != commitment
+            || (permit.scope.get("execution_id").is_some()
+                && manifest["artifact_kind"] != "CIPHERTEXT")
         {
             return Err(UploadError::Denied);
         }

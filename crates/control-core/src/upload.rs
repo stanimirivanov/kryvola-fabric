@@ -14,6 +14,7 @@ use tokio::{
 mod compute_read;
 pub(crate) mod finalize;
 mod multipart;
+mod output;
 mod retention;
 use crate::{
     authorization::UploadPermit,
@@ -34,6 +35,7 @@ pub enum UploadError {
     Size,
     Quota,
     Conflict,
+    IdempotencyConflict,
     Integrity,
     Unavailable,
 }
@@ -153,6 +155,13 @@ impl UploadStore {
         }
         let bytes = bytes as i64;
         let mut tx = self.begin(&mut permit).await?;
+        let execution = permit.scope["execution_id"].as_str();
+        if execution.is_some()
+            && let Some(id) = output::reservation_retry(&mut tx, &permit, bytes).await?
+        {
+            tx.commit().await?;
+            return Ok(id);
+        }
         // Take the same tenant row lock for every admission, including the first.
         sqlx::query("INSERT INTO fabric_upload_tenants VALUES ($1) ON CONFLICT DO NOTHING")
             .bind(&permit.tenant)
@@ -190,6 +199,10 @@ impl UploadStore {
         .await?;
         if tombstoned {
             return Err(UploadError::Unavailable);
+        }
+        if let Some(execution) = execution {
+            output::record(&mut tx, &permit, execution, &id, bytes).await?;
+            check_permit(&permit)?;
         }
         tx.commit().await?;
         Ok(id)

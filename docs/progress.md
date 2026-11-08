@@ -639,3 +639,20 @@ signing boundary. No receipt grants are enabled by default.
 The F-live upload suite uses fixed test-only v3 Ed25519 signatures over the
 Spec canonical preimage. It checks durable bytes and upload binding, replay,
 competing claims, tampering, trust replacement, lease expiry and cancellation.
+
+## M1-PR18 scoped output grants
+
+Fabric serves `POST /v1/executions/output-grants` when the mTLS registry
+and upload services are configured. Deployment policy may include
+`output_grants` entries with `spiffe_id`, `token_sha256`, the exact v1
+`attempt`, `execution_id`, and `expires_unix_ms`. These entries count
+toward the existing total policy limit. Revoke by removing the entry
+and use a fresh random credential when reauthorizing. Existing tokens
+cannot be reused to obtain another issuance capability.
+
+Issued bearers are boot-local, bounded to 256 outstanding grants and
+carried only in a sensitive, non-cacheable response header. PostgreSQL
+durably binds reservations to the execution and enforces identical
+retries without duplicate quota usage. Removal of an upload retains
+its reservation binding. Scoped uploads reject legacy mutation grants
+and receipts for other executions.

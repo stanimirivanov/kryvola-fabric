@@ -14,7 +14,7 @@ use axum::{
 use futures_util::TryStreamExt;
 use object_store::{ClientOptions, aws::AmazonS3Builder};
 use serde::Deserialize;
-use serde_json::json;
+use serde_json::{Value, json};
 use spiffe::SpiffeId;
 use sqlx::PgPool;
 use std::{
@@ -96,6 +96,78 @@ impl UploadApi {
             || matches!(p.as_slice(), ["", "v1", "uploads", _, "manifest"] if *method == Method::PUT)
             || matches!(p.as_slice(), ["", "v1", "uploads", _, "abort" | "finalize"] if *method == Method::POST)
     }
+    pub fn matches_output_grant(method: &Method, path: &str) -> bool {
+        *method == Method::POST && path == "/v1/executions/output-grants"
+    }
+
+    pub async fn handle_output_grant(
+        &self,
+        request: Request,
+        (peer, auth, identity_expiry, provider_deadline): (&SpiffeId, &Authorizer, u64, Instant),
+        schemas: &RuntimeValidator,
+    ) -> Response {
+        let (parts, body) = request.into_parts();
+        let result = async {
+            if Instant::now() >= provider_deadline
+                || !now_unix_ms().is_some_and(|now| now < identity_expiry)
+            {
+                return Err(UploadError::Denied);
+            }
+            let token = bearer(&parts.headers).ok_or(UploadError::Denied)?;
+            let authority = auth.output_authority(peer, token)?;
+            if parts.uri.query().is_some() {
+                return Err(UploadError::Integrity);
+            }
+            let bytes = collect(body).await?;
+            let body = schemas
+                .decode("IssueOutputGrantRequest", &bytes)
+                .map_err(|_| UploadError::Integrity)?;
+            if !authority.matches(&body) {
+                return Err(UploadError::Denied);
+            }
+            let deadline = self.store.output_deadline(&body, &peer.to_string()).await?;
+            let (grant, expires) = auth.mint_output(
+                authority,
+                &body,
+                deadline,
+                (identity_expiry, provider_deadline),
+            )?;
+            let response =
+                json!({"schema_version": "1", "expires_unix_ms": expires.to_string()}).to_string();
+            schemas
+                .decode("IssueOutputGrantResponse", response.as_bytes())
+                .map_err(|_| UploadError::Unavailable)?;
+            let mut credential =
+                header::HeaderValue::from_str(&grant).map_err(|_| UploadError::Unavailable)?;
+            credential.set_sensitive(true);
+            Ok::<_, UploadError>(
+                (
+                    [
+                        (
+                            header::CONTENT_TYPE,
+                            header::HeaderValue::from_static("application/json"),
+                        ),
+                        (
+                            header::CACHE_CONTROL,
+                            header::HeaderValue::from_static("no-store"),
+                        ),
+                        (
+                            header::HeaderName::from_static("kryvola-output-grant"),
+                            credential,
+                        ),
+                    ],
+                    response,
+                )
+                    .into_response(),
+            )
+        }
+        .await;
+        result.unwrap_or_else(|failure| {
+            let (status, body) = upload_error(failure);
+            (status, [(header::CONTENT_TYPE, "application/json")], body).into_response()
+        })
+    }
+
     pub fn matches_read(method: &Method, path: &str) -> bool {
         *method == Method::POST
             && (path == "/v1/compute-inputs/manifest"
@@ -203,14 +275,14 @@ impl UploadApi {
         if !crate::authorization::now_unix_ms().is_some_and(|now| now < identity_expiry) {
             return deny(Denial::Identity);
         }
-        let Some(mut permit) = auth.upload_permit(peer, token) else {
+        let path: Vec<_> = parts.uri.path().split('/').collect();
+        let Some(mut permit) = auth.upload_permit_for(peer, token, &upload_target(&path)) else {
             return error(RuntimeCode::Forbidden, StatusCode::FORBIDDEN);
         };
         permit.bind_transport(identity_expiry, deadline);
         if parts.uri.query().is_some() {
             return invalid();
         }
-        let path: Vec<_> = parts.uri.path().split('/').collect();
         let part = path.get(4) == Some(&"parts");
         let length = parts
             .headers
@@ -290,26 +362,50 @@ impl UploadApi {
             }
         }
         .await;
-        match outcome {
-            Ok(reply) => reply,
-            Err(UploadError::Denied) => deny(Denial::Policy),
-            Err(UploadError::Size) => {
-                error(RuntimeCode::PayloadTooLarge, StatusCode::PAYLOAD_TOO_LARGE)
-            }
-            Err(UploadError::Quota) => {
-                error(RuntimeCode::QuotaExceeded, StatusCode::TOO_MANY_REQUESTS)
-            }
-            Err(UploadError::NotFound) => error(RuntimeCode::NotFound, StatusCode::NOT_FOUND),
-            Err(UploadError::AttemptExpired) => {
-                error(RuntimeCode::AttemptExpired, StatusCode::CONFLICT)
-            }
-            Err(UploadError::StaleFence | UploadError::Conflict) => {
-                error(RuntimeCode::StaleFence, StatusCode::CONFLICT)
-            }
-            Err(UploadError::Integrity) => invalid(),
-            Err(UploadError::Unavailable) => {
-                error(RuntimeCode::Unavailable, StatusCode::SERVICE_UNAVAILABLE)
-            }
+        outcome.unwrap_or_else(upload_error)
+    }
+}
+
+fn upload_target(path: &[&str]) -> Value {
+    match path {
+        ["", "v1", "uploads"] => json!({"action": "RESERVE"}),
+        ["", "v1", "uploads", id, "parts", index] => index
+            .parse::<u16>()
+            .ok()
+            .filter(|part| *part <= 1023 && part.to_string() == *index)
+            .map_or(
+                Value::Null,
+                |part| json!({"action": "PUT_PART", "upload_id": id, "part_index": part}),
+            ),
+        ["", "v1", "uploads", id, action] => {
+            let action = match *action {
+                "manifest" => "PUT_MANIFEST",
+                "finalize" => "FINALIZE",
+                "abort" => "ABORT",
+                _ => return Value::Null,
+            };
+            json!({"action": action, "upload_id": id})
+        }
+        _ => Value::Null,
+    }
+}
+
+fn upload_error(failure: UploadError) -> Reply {
+    match failure {
+        UploadError::Denied => deny(Denial::Policy),
+        UploadError::Size => error(RuntimeCode::PayloadTooLarge, StatusCode::PAYLOAD_TOO_LARGE),
+        UploadError::Quota => error(RuntimeCode::QuotaExceeded, StatusCode::TOO_MANY_REQUESTS),
+        UploadError::NotFound => error(RuntimeCode::NotFound, StatusCode::NOT_FOUND),
+        UploadError::AttemptExpired => error(RuntimeCode::AttemptExpired, StatusCode::CONFLICT),
+        UploadError::StaleFence | UploadError::Conflict => {
+            error(RuntimeCode::StaleFence, StatusCode::CONFLICT)
+        }
+        UploadError::IdempotencyConflict => {
+            error(RuntimeCode::IdempotencyConflict, StatusCode::CONFLICT)
+        }
+        UploadError::Integrity => invalid(),
+        UploadError::Unavailable => {
+            error(RuntimeCode::Unavailable, StatusCode::SERVICE_UNAVAILABLE)
         }
     }
 }
