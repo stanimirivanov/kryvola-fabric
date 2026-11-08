@@ -122,6 +122,9 @@ impl Registry {
         if owner != workload
             || scope["attempt"] != *attempt
             || scope["purpose"] != "COMPUTE_WRITE"
+            || scope
+                .get("execution_id")
+                .is_some_and(|bound| bound != &body["execution_id"])
             || scope["manifest_digest"] != digest
             || Some(digest.as_str()) != output
         {

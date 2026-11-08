@@ -8,7 +8,16 @@ from pathlib import Path
 
 
 def exercise(
-    test, request, sql, operation, attempt, upload, registry_grants, receipt_grants, publish
+    test,
+    request,
+    sql,
+    operation,
+    attempt,
+    upload,
+    registry_grants,
+    receipt_grants,
+    publish,
+    scoped_upload,
 ):
     fixture = json.loads((Path(__file__).parent / "fixtures/execution-receipts.json").read_text())
     first, second, changed = fixture["records"]
@@ -92,6 +101,8 @@ def exercise(
         .rstrip("=")
     )
     expect("FORBIDDEN", token, {**body(first), "signature_base64url": tampered})
+
+    expect("FORBIDDEN", other, {**body(second), "output_upload_id": scoped_upload})
 
     expected = (200, {"schema_version": "1", "receipt_digest": first["receipt_digest"]})
     test.assertEqual(request("POST", route, token, body(first)), expected)

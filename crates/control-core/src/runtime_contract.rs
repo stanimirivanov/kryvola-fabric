@@ -31,6 +31,8 @@ impl RuntimeValidator {
             "FinalizeUploadRequest",
             "FinalizeUploadResponse",
             "OperationResponse",
+            "IssueOutputGrantRequest",
+            "IssueOutputGrantResponse",
             "RecoveryFenceResponse",
             "ReadComputeInputRequest",
             "PersistExecutionReceiptRequest",

@@ -9,6 +9,9 @@ use std::{
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
+mod output;
+use output::{IssuedOutputGrant, OutputAuthority};
+
 use ring::{digest, rand::SecureRandom};
 use serde::{Deserialize, Serialize};
 use spiffe::SpiffeId;
@@ -88,6 +91,8 @@ struct Policy {
     registry_grants: Vec<RegistryGrant>,
     #[serde(default)]
     receipt_grants: Vec<ReceiptGrant>,
+    #[serde(default)]
+    output_grants: Vec<OutputAuthority>,
 }
 
 #[derive(Deserialize)]
@@ -308,7 +313,10 @@ impl Authorizer {
         }
         let policy: Policy = serde_json::from_slice(&bytes).map_err(|_| Denial::Policy)?;
         if policy.boot_id != self.boot_id
-            || policy.grants.len() + policy.registry_grants.len() + policy.receipt_grants.len()
+            || policy.grants.len()
+                + policy.registry_grants.len()
+                + policy.receipt_grants.len()
+                + policy.output_grants.len()
                 > MAX_GRANTS
         {
             return Err(Denial::Policy);
@@ -464,6 +472,7 @@ fn grant_live(expiry: u64, now: u64) -> bool {
 #[derive(Default)]
 struct ReplayWindow {
     entries: HashMap<String, u64>,
+    issued_outputs: HashMap<String, IssuedOutputGrant>,
     high_water: u64,
 }
 
