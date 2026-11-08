@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
+base64 = "=0.22.1"
 hex = "=0.4.3"
 blake3 = "=1.8.7"
 futures-util = "=0.3.34"

@@ -86,6 +86,8 @@ struct Policy {
     grants: Vec<Grant>,
     #[serde(default)]
     registry_grants: Vec<RegistryGrant>,
+    #[serde(default)]
+    receipt_grants: Vec<ReceiptGrant>,
 }
 
 #[derive(Deserialize)]
@@ -128,6 +130,30 @@ struct RegistryGrant {
     scope: RegistryScope,
     actions: Vec<RegistryAction>,
     expires_unix_ms: u64,
+}
+
+#[derive(Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ReceiptGrant {
+    spiffe_id: String,
+    token_sha256: String,
+    attempt: Attempt,
+    execution_id: String,
+    pub signer: String,
+    pub key_id: String,
+    pub key_epoch: String,
+    pub public_key_hex: String,
+    expires_unix_ms: u64,
+}
+
+impl ReceiptGrant {
+    pub fn matches(&self, body: &serde_json::Value) -> bool {
+        serde_json::from_value::<Attempt>(body["attempt"].clone())
+            .ok()
+            .as_ref()
+            == Some(&self.attempt)
+            && body["execution_id"] == self.execution_id
+    }
 }
 
 /// A freshly redeemed compute-write grant. Runtime callers supply the verified peer.
@@ -282,11 +308,52 @@ impl Authorizer {
         }
         let policy: Policy = serde_json::from_slice(&bytes).map_err(|_| Denial::Policy)?;
         if policy.boot_id != self.boot_id
-            || policy.grants.len() + policy.registry_grants.len() > MAX_GRANTS
+            || policy.grants.len() + policy.registry_grants.len() + policy.receipt_grants.len()
+                > MAX_GRANTS
         {
             return Err(Denial::Policy);
         }
         Ok(policy)
+    }
+
+    /// Dedicated EXECUTION_RECEIPT_WRITE authority and its trusted signing key.
+    pub(crate) fn receipt_grant(&self, workload: &SpiffeId, token: &str) -> Option<ReceiptGrant> {
+        let result = (|| {
+            if !lowercase_digest(token) {
+                return Err(Denial::Credential);
+            }
+            let hash = sha256_hex(token.as_bytes());
+            let policy = self.read_policy()?;
+            if policy.grants.iter().any(|grant| grant.token_sha256 == hash)
+                || policy
+                    .registry_grants
+                    .iter()
+                    .any(|grant| grant.token_sha256 == hash)
+            {
+                return Err(Denial::Policy);
+            }
+            let mut matching = policy
+                .receipt_grants
+                .into_iter()
+                .filter(|grant| grant.token_sha256 == hash);
+            let grant = matching.next().ok_or(Denial::Policy)?;
+            if matching.next().is_some()
+                || grant.spiffe_id != workload.to_string()
+                || !lowercase_digest(&grant.public_key_hex)
+            {
+                return Err(Denial::Policy);
+            }
+            let now = now_unix_ms().ok_or(Denial::Clock)?;
+            self.redeemed
+                .lock()
+                .map_err(|_| Denial::Policy)?
+                .observe(now)?;
+            if !grant_live(grant.expires_unix_ms, now) {
+                return Err(Denial::Expiry);
+            }
+            Ok(grant)
+        })();
+        result.map_err(Denial::audit).ok()
     }
 
     /// Reusable coordinator capability; separate from one-use artifact grants.

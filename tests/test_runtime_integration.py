@@ -197,6 +197,7 @@ class RuntimeFixtureTests(unittest.TestCase):
         previous = "UPLOAD_FAILURE_CAMPAIGN_PASSED\nVERIFIED_FINALIZATION_HTTP_PASSED"
         fencing = "FENCING_RACE_TRACE_PASSED"
         compute_reads = "FENCED_COMPUTE_INPUT_READS_PASSED"
+        receipts = "SIGNED_EXECUTION_RECEIPTS_PASSED"
         markers = previous + "\nFINALIZATION_RECOVERY_PASSED\nFENCED_SELECTION_TRACE_PASSED"
         boundaries = (
             "fresh-race",
@@ -219,6 +220,8 @@ class RuntimeFixtureTests(unittest.TestCase):
             + fencing
             + "\n"
             + compute_reads
+            + "\n"
+            + receipts
         )
         for code, stdout, output in (
             (0, proof, "Ran 0 tests\nOK"),
@@ -228,6 +231,7 @@ class RuntimeFixtureTests(unittest.TestCase):
             (0, proof.replace("FENCED_SELECTION_TRACE_PASSED", ""), valid),
             (0, proof.replace(fencing, ""), valid),
             (0, proof.replace(compute_reads, ""), valid),
+            (0, proof.replace(receipts, ""), valid),
             (0, proof.replace("Finalization boundary passed: commit", ""), valid),
             (0, "UPLOAD_FAILURE_CAMPAIGN_PASSED", valid),
             (0, "VERIFIED_FINALIZATION_HTTP_PASSED", valid),

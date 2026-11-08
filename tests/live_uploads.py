@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
+from execution_receipts import exercise as exercise_receipts
 from fencing_race import exercise as exercise_fencing
 from finalization_recovery import exercise as recover_finalization
 from selection_trace import exercise as exercise_selection
@@ -104,12 +105,14 @@ class UploadHttpTests(unittest.TestCase):
                 coordinator = "f" * 64
                 grants = []
                 selection_grants = []
+                receipt_grants = []
                 counter = 0
 
                 def publish():
                     document = {
                         "boot_id": boot,
                         "grants": grants,
+                        "receipt_grants": receipt_grants,
                         "registry_grants": [
                             {
                                 "spiffe_id": "spiffe://fabric.test/coordinator",
@@ -206,6 +209,10 @@ class UploadHttpTests(unittest.TestCase):
                         0
                     ],
                     403,
+                )
+                self.assertEqual(
+                    request("POST", "/v1/executions/receipt", coordinator, {}, name="coordinator"),
+                    (403, {"schema_version": "1", "code": "FORBIDDEN"}),
                 )
                 scope: dict[str, Any] = {
                     "schema_version": "1",
@@ -423,6 +430,17 @@ class UploadHttpTests(unittest.TestCase):
                     )[0],
                     400,
                 )
+                check_expired_receipt = exercise_receipts(
+                    self,
+                    request,
+                    sql,
+                    operation,
+                    scope["attempt"],
+                    candidate,
+                    selection_grants,
+                    receipt_grants,
+                    publish,
+                )
                 read_path = "/v1/compute-inputs/manifest"
                 part_path = "/v1/compute-inputs/parts/0"
                 read_scope = {
@@ -604,6 +622,8 @@ class UploadHttpTests(unittest.TestCase):
                     request("POST", read_path, read_grant(), read_scope)[1]["code"],
                     "ATTEMPT_EXPIRED",
                 )
+
+                check_expired_receipt()
 
                 def authorize_selection(attempt, actions=("EXECUTION_REGISTER", "RESULT_SELECT")):
                     nonlocal counter

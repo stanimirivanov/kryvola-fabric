@@ -1,5 +1,10 @@
 //! Authenticated HTTP projections over the existing transactional registry.
-use std::{fs::File, io::Read, str::FromStr, time::Duration};
+use std::{
+    fs::File,
+    io::Read,
+    str::FromStr,
+    time::{Duration, Instant},
+};
 
 use axum::http::{Method, StatusCode};
 use serde_json::{Value, json};
@@ -7,7 +12,8 @@ use spiffe::SpiffeId;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 
 use crate::{
-    authorization::{Authorizer, Denial, RegistryAction},
+    authorization::{Authorizer, Denial, RegistryAction, now_unix_ms},
+    receipt::SignedReceipt,
     registry::{
         Cancellation, ExecutionTarget, OperationIntent, OperationKey, Registry, RegistryError,
     },
@@ -64,6 +70,65 @@ impl RegistryApi {
             })
         }
         load(path).await.map_err(|_| "registry unavailable")
+    }
+
+    pub async fn handle_receipt(
+        &self,
+        bytes: &[u8],
+        (peer, auth, token, identity_expiry, provider_deadline): (
+            &SpiffeId,
+            &Authorizer,
+            Option<&str>,
+            u64,
+            Instant,
+        ),
+        schemas: &RuntimeValidator,
+    ) -> Reply {
+        let result = async {
+            let token = token.ok_or(RegistryError::Forbidden)?;
+            let grant = auth
+                .receipt_grant(peer, token)
+                .ok_or(RegistryError::Forbidden)?;
+            let body = schemas
+                .decode("PersistExecutionReceiptRequest", bytes)
+                .map_err(|_| RegistryError::InvalidIntent)?;
+            if !grant.matches(&body) {
+                return Err(RegistryError::Forbidden);
+            }
+            let signed = SignedReceipt::verify(&body, &grant)?;
+            let response =
+                json!({"schema_version":"1", "receipt_digest": signed.digest}).to_string();
+            schemas
+                .decode("PersistExecutionReceiptResponse", response.as_bytes())
+                .map_err(|_| RegistryError::Unavailable)?;
+            self.registry
+                .persist_receipt(&body, &peer.to_string(), &signed, || {
+                    Instant::now() < provider_deadline
+                        && now_unix_ms().is_some_and(|now| now < identity_expiry)
+                        && auth.receipt_grant(peer, token).as_ref() == Some(&grant)
+                })
+                .await?;
+            Ok(response)
+        }
+        .await;
+        match result {
+            Ok(body) => (StatusCode::OK, body),
+            Err(RegistryError::Forbidden) => forbidden(),
+            Err(RegistryError::InvalidIntent) => {
+                error(RuntimeCode::InvalidRequest, StatusCode::BAD_REQUEST)
+            }
+            Err(RegistryError::NotFound) => error(RuntimeCode::NotFound, StatusCode::NOT_FOUND),
+            Err(RegistryError::IdempotencyConflict) => {
+                error(RuntimeCode::IdempotencyConflict, StatusCode::CONFLICT)
+            }
+            Err(RegistryError::AttemptExpired) => {
+                error(RuntimeCode::AttemptExpired, StatusCode::CONFLICT)
+            }
+            Err(RegistryError::Unavailable) => {
+                error(RuntimeCode::Unavailable, StatusCode::SERVICE_UNAVAILABLE)
+            }
+            Err(_) => error(RuntimeCode::StaleFence, StatusCode::CONFLICT),
+        }
     }
 
     pub fn matches(method: &Method, path: &str) -> bool {

@@ -24,7 +24,7 @@ pub(super) fn number(value: &Value) -> Result<u64> {
         .ok_or(UploadError::Integrity)
 }
 
-pub(super) fn digest(domain: &[u8], parts: &[&[u8]]) -> String {
+pub(crate) fn digest(domain: &[u8], parts: &[&[u8]]) -> String {
     let mut state = blake3::Hasher::new();
     state.update(domain);
     for part in parts {
@@ -33,7 +33,7 @@ pub(super) fn digest(domain: &[u8], parts: &[&[u8]]) -> String {
     state.finalize().to_hex().to_string()
 }
 
-pub(super) fn manifest(bytes: &[u8]) -> Result<Value> {
+pub(crate) fn manifest(bytes: &[u8]) -> Result<Value> {
     if bytes.len() > CONTROL_BYTES || !bytes.is_ascii() {
         return Err(UploadError::Size);
     }

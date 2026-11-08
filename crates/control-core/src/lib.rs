@@ -4,6 +4,7 @@ pub mod authorization;
 pub mod contract;
 #[path = "../../../contracts/spec/rust/limits.rs"]
 pub mod limits;
+mod receipt;
 pub mod registry;
 pub mod registry_http;
 pub mod runtime_contract;

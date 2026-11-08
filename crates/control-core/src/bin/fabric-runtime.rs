@@ -109,7 +109,9 @@ async fn handle(
         Ok(Ok(bytes))
             if peer.is_some()
                 && registry.is_some()
-                && RegistryApi::matches(&headers.method, headers.uri.path()) =>
+                && (RegistryApi::matches(&headers.method, headers.uri.path())
+                    || (headers.method == Method::POST
+                        && headers.uri.path() == "/v1/executions/receipt")) =>
         {
             let (workload, auth, expiry, deadline) = peer.expect("peer guard");
             if Instant::now() >= deadline {
@@ -121,6 +123,17 @@ async fn handle(
             if headers.uri.query().is_some() {
                 Denial::Scope.audit();
                 return reply(StatusCode::BAD_REQUEST, RuntimeCode::InvalidRequest.body());
+            }
+            if headers.method == Method::POST && headers.uri.path() == "/v1/executions/receipt" {
+                let (status, body) = registry
+                    .expect("registry guard")
+                    .handle_receipt(
+                        &bytes,
+                        (workload, auth, bearer(&headers.headers), expiry, deadline),
+                        runtime,
+                    )
+                    .await;
+                return reply(status, body);
             }
             let (status, body) = registry
                 .expect("registry guard")

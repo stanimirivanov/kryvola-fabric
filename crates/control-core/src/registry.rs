@@ -4,6 +4,7 @@ mod barriers;
 mod events;
 pub use barriers::{Cancellation, RecoveryFence};
 pub use events::{Broker, Delivery, DeliveryRef};
+mod receipt;
 mod selection;
 pub use selection::{ExecutionTarget, SelectedResult};
 use serde_json::Value;
@@ -17,6 +18,7 @@ type Result<T> = std::result::Result<T, RegistryError>;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RegistryError {
     InvalidIntent,
+    Forbidden,
     IdempotencyConflict,
     NotFound,
     StaleWorkflow,
@@ -210,7 +212,14 @@ impl Registry {
         tx: &mut Transaction<'_, Postgres>,
         scope: &Value,
     ) -> Result<std::time::Instant> {
-        let attempt = &scope["attempt"];
+        Self::lock_artifact_attempt(tx, &scope["attempt"], false).await
+    }
+
+    async fn lock_artifact_attempt(
+        tx: &mut Transaction<'_, Postgres>,
+        attempt: &Value,
+        allow_selected: bool,
+    ) -> Result<std::time::Instant> {
         let tenant = string(attempt, "tenant_scope")?;
         let operation = string(attempt, "operation_id")?;
         let key = OperationKey {
@@ -228,7 +237,7 @@ impl Registry {
             return Err(RegistryError::StaleWorkflow);
         }
         barriers::require_open(tx, key).await?;
-        if selection::read_selection(&mut **tx, key).await?.is_some() {
+        if !allow_selected && selection::read_selection(&mut **tx, key).await?.is_some() {
             return Err(RegistryError::SelectionConflict);
         }
         let started = std::time::Instant::now();
