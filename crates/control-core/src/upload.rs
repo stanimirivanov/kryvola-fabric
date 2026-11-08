@@ -11,6 +11,7 @@ use tokio::{
     time::timeout,
 };
 
+mod compute_read;
 mod finalize;
 mod multipart;
 mod retention;
@@ -50,6 +51,16 @@ pub struct UploadStore {
     fenced: bool,
 }
 
+fn registry_error(error: crate::registry::RegistryError) -> UploadError {
+    use crate::registry::RegistryError;
+    match error {
+        RegistryError::NotFound => UploadError::NotFound,
+        RegistryError::AttemptExpired => UploadError::AttemptExpired,
+        RegistryError::Unavailable => UploadError::Unavailable,
+        _ => UploadError::StaleFence,
+    }
+}
+
 fn check_permit(permit: &UploadPermit) -> Result<()> {
     if permit.live() {
         Ok(())
@@ -80,17 +91,11 @@ impl UploadStore {
         check_permit(permit)?;
         let mut tx = self.pool.begin().await?;
         if self.fenced {
-            match crate::registry::Registry::upload_deadline(&mut tx, &permit.scope).await {
+            match crate::registry::Registry::artifact_deadline(&mut tx, &permit.scope).await {
                 Ok(deadline) => permit.bound_deadline(deadline),
                 Err(error) => {
                     tx.commit().await?; // Persist observed expiry retirement even on denial.
-                    use crate::registry::RegistryError;
-                    return Err(match error {
-                        RegistryError::NotFound => UploadError::NotFound,
-                        RegistryError::AttemptExpired => UploadError::AttemptExpired,
-                        RegistryError::Unavailable => UploadError::Unavailable,
-                        _ => UploadError::StaleFence,
-                    });
+                    return Err(registry_error(error));
                 }
             }
         }

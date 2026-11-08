@@ -604,3 +604,16 @@ and failure controls pass; a deliberately unhealthy real shell made standalone
 F-live fail and its owned Compose project was removed. The runtime source was
 restored, and healthy standalone F-live passed all probes. Full publication qualification
 requires a clean committed checkout; its final outcome is retained in the PR.
+
+## M1-PR18 prerequisite — fenced compute-input reads
+
+The runtime consumes the merged Spec read schema and serves finalized canonical
+manifests and verified indexed parts from private storage. Each request uses a
+fresh, exact SPIFFE-bound compute-read grant. The current operation must list
+the manifest digest and its tenant and key context must match. PostgreSQL holds
+the operation and artifact locks through bounded verification and admission.
+Successful bodies carry exact lengths and `Cache-Control: no-store`.
+
+F-live checks replay and wrong-purpose denials, input membership, stale and
+expired attempts, reclamation, tampered manifest and part bytes, and denial
+after real cancellation and recovery barriers.
