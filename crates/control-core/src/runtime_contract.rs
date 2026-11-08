@@ -33,6 +33,8 @@ impl RuntimeValidator {
             "OperationResponse",
             "RecoveryFenceResponse",
             "ReadComputeInputRequest",
+            "PersistExecutionReceiptRequest",
+            "PersistExecutionReceiptResponse",
             "RegisterExecutionRequest",
             "RuntimeConflictError",
             "RuntimeError",

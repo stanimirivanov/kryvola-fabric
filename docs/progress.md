@@ -617,3 +617,25 @@ Successful bodies carry exact lengths and `Cache-Control: no-store`.
 F-live checks replay and wrong-purpose denials, input membership, stale and
 expired attempts, reclamation, tampered manifest and part bytes, and denial
 after real cancellation and recovery barriers.
+
+## M1-PR18 signed execution receipt prerequisite
+
+Fabric consumes the merged signed execution receipt contract at the pinned Spec
+revision. The registry-enabled mTLS runtime accepts a receipt only for its
+registered live execution and the submitting workload's exact finalized
+ciphertext upload. PostgreSQL stores the signed bytes and upload binding
+atomically. Receipt storage survives ordinary artifact reclamation and grants
+no selection, read, release or retention authority.
+
+Deployment policy may include a bounded `receipt_grants` array alongside
+existing grants. Each entry has `spiffe_id`, `token_sha256`, the exact
+versioned `attempt`, `execution_id`, `signer`, `key_id`, `key_epoch`,
+`public_key_hex` (lowercase Ed25519 public key), and `expires_unix_ms`.
+Provision these entries from trusted signing policy for the workload and
+tenant. Remove entries to revoke authority. Grants are short-lived and
+reusable for identical authorized retries. Keep signing keys in the worker
+signing boundary. No receipt grants are enabled by default.
+
+The F-live upload suite uses fixed test-only v3 Ed25519 signatures over the
+Spec canonical preimage. It checks durable bytes and upload binding, replay,
+competing claims, tampering, trust replacement, lease expiry and cancellation.

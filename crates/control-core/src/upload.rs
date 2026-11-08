@@ -12,7 +12,7 @@ use tokio::{
 };
 
 mod compute_read;
-mod finalize;
+pub(crate) mod finalize;
 mod multipart;
 mod retention;
 use crate::{
