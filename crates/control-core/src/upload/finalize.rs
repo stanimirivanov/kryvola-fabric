@@ -17,7 +17,7 @@ pub struct FinalizedArtifact {
     pub byte_length: u64,
 }
 
-fn number(value: &Value) -> Result<u64> {
+pub(super) fn number(value: &Value) -> Result<u64> {
     value
         .as_str()
         .and_then(|s| s.parse().ok())
@@ -82,7 +82,7 @@ pub(super) fn manifest(bytes: &[u8]) -> Result<Value> {
     Ok(value)
 }
 
-async fn read_exact_object(
+pub(super) async fn read_exact_object(
     objects: &dyn ObjectStore,
     key: &Path,
     length: usize,

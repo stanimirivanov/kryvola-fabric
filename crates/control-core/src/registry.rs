@@ -206,7 +206,7 @@ impl Registry {
             .ok_or(RegistryError::NotFound)
     }
 
-    pub(crate) async fn upload_deadline(
+    pub(crate) async fn artifact_deadline(
         tx: &mut Transaction<'_, Postgres>,
         scope: &Value,
     ) -> Result<std::time::Instant> {

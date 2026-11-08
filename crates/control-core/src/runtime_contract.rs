@@ -32,6 +32,7 @@ impl RuntimeValidator {
             "FinalizeUploadResponse",
             "OperationResponse",
             "RecoveryFenceResponse",
+            "ReadComputeInputRequest",
             "RegisterExecutionRequest",
             "RuntimeConflictError",
             "RuntimeError",

@@ -159,10 +159,18 @@ class UploadHttpTests(unittest.TestCase):
                         conn.request(method, path, body, headers)
                         result = conn.getresponse()
                         raw = result.read()
+                        if result.getheader("Content-Type") == "application/octet-stream":
+                            self.assertEqual(result.getheader("Content-Length"), str(len(raw)))
+                            self.assertEqual(result.getheader("Cache-Control"), "no-store")
+                            return result.status, raw
                         return result.status, json.loads(raw) if raw else None
                     finally:
                         conn.close()
 
+                corpus = json.loads(
+                    (ROOT / "contracts/spec/fixtures/canonical-modular-v2.json").read_text()
+                )["objects"][0]
+                manifest = bytes.fromhex(corpus["canonical_hex"])
                 publish()
                 self.assertEqual(
                     request(
@@ -172,7 +180,7 @@ class UploadHttpTests(unittest.TestCase):
                         {
                             "schema_version": "1",
                             "operation": operation,
-                            "input_manifest_digests": ["a" * 64],
+                            "input_manifest_digests": [corpus["digest"]],
                         },
                         name="coordinator",
                     )[0],
@@ -199,10 +207,6 @@ class UploadHttpTests(unittest.TestCase):
                     ],
                     403,
                 )
-                corpus = json.loads(
-                    (ROOT / "contracts/spec/fixtures/canonical-modular-v2.json").read_text()
-                )["objects"][0]
-                manifest = bytes.fromhex(corpus["canonical_hex"])
                 scope: dict[str, Any] = {
                     "schema_version": "1",
                     "attempt": lease["attempt"],
@@ -419,6 +423,107 @@ class UploadHttpTests(unittest.TestCase):
                     )[0],
                     400,
                 )
+                read_path = "/v1/compute-inputs/manifest"
+                part_path = "/v1/compute-inputs/parts/0"
+                read_scope = {
+                    "schema_version": "1",
+                    "attempt": scope["attempt"],
+                    "manifest_digest": scope["manifest_digest"],
+                }
+
+                def read_grant(**changes):
+                    return issue(**({"purpose": "COMPUTE_READ"} | changes))
+
+                self.assertEqual(
+                    request("POST", read_path, read_grant(), read_scope), (200, manifest)
+                )
+                self.assertEqual(
+                    request("POST", part_path, read_grant(), read_scope),
+                    (200, bytes([0, 1, 2, 255])),
+                )
+                token = read_grant()
+                self.assertEqual(request("POST", read_path, token, read_scope)[0], 200)
+                self.assertEqual(request("POST", read_path, token, read_scope)[0], 403)
+                self.assertEqual(request("POST", read_path, issue(), read_scope)[0], 403)
+                self.assertEqual(
+                    request("POST", read_path, read_grant(), read_scope, name="other")[0], 403
+                )
+                unapproved = "e" * 64
+                self.assertEqual(
+                    request(
+                        "POST",
+                        read_path,
+                        read_grant(manifest_digest=unapproved),
+                        {**read_scope, "manifest_digest": unapproved},
+                    )[0],
+                    403,
+                )
+                self.assertEqual(
+                    request(
+                        "POST",
+                        read_path,
+                        read_grant(fence="999"),
+                        {**read_scope, "attempt": {**read_scope["attempt"], "fence": "999"}},
+                    )[1]["code"],
+                    "STALE_FENCE",
+                )
+                self.assertEqual(
+                    request("POST", "/v1/compute-inputs/parts/1", read_grant(), read_scope)[0], 404
+                )
+                sql(f"UPDATE fabric_uploads SET reclaiming=true WHERE id='{candidate}'")
+                self.assertEqual(request("POST", read_path, read_grant(), read_scope)[0], 404)
+                sql(f"UPDATE fabric_uploads SET reclaiming=false WHERE id='{candidate}'")
+                sql("UPDATE fabric_operations SET inputs='[]' WHERE operation_id='upload-http'")
+                self.assertEqual(request("POST", read_path, read_grant(), read_scope)[0], 403)
+                sql(
+                    "UPDATE fabric_operations "
+                    f"SET inputs=jsonb_build_array('{corpus['digest']}'::text) "
+                    "WHERE operation_id='upload-http'"
+                )
+                for context, expected_status in (
+                    ("c" * 64, 403),
+                    (corpus["value"]["key_context_digest"], 200),
+                ):
+                    sql(
+                        "UPDATE fabric_operations SET intent=jsonb_set(intent, "
+                        "'{key_context_ref,key_context_digest}', "
+                        f"to_jsonb('{context}'::text)) WHERE operation_id='upload-http'"
+                    )
+                    self.assertEqual(
+                        request("POST", read_path, read_grant(), read_scope)[0], expected_status
+                    )
+                corrupted = subprocess.run(
+                    [
+                        "docker",
+                        "exec",
+                        "-i",
+                        os.environ["FABRIC_FIXTURE_S3_CLIENT"],
+                        "aws",
+                        "--endpoint-url",
+                        "http://s3:8333",
+                        "s3",
+                        "cp",
+                        "-",
+                        f"s3://fabric-runtime/immutable/{candidate}/0",
+                    ],
+                    input=b"bad!",
+                    capture_output=True,
+                    timeout=10,
+                    check=False,
+                )
+                self.assertEqual(corrupted.returncode, 0, "fixture part corruption failed")
+                self.assertEqual(
+                    request("POST", part_path, read_grant(), read_scope),
+                    (503, {"schema_version": "1", "code": "UNAVAILABLE"}),
+                )
+                sql(
+                    "UPDATE fabric_finalized_artifacts "
+                    "SET canonical_manifest=canonical_manifest || decode('20','hex') "
+                    f"WHERE upload_id='{candidate}'"
+                )
+                self.assertEqual(
+                    request("POST", part_path, read_grant(), read_scope)[1]["code"], "UNAVAILABLE"
+                )
                 # Fixture teardown only; this does not qualify production GC or abort.
                 for namespace in ("staging", "immutable"):
                     cleared = subprocess.run(
@@ -495,6 +600,11 @@ class UploadHttpTests(unittest.TestCase):
                     "ATTEMPT_EXPIRED",
                 )
 
+                self.assertEqual(
+                    request("POST", read_path, read_grant(), read_scope)[1]["code"],
+                    "ATTEMPT_EXPIRED",
+                )
+
                 def authorize_selection(attempt, actions=("EXECUTION_REGISTER", "RESULT_SELECT")):
                     nonlocal counter
                     counter += 1
@@ -547,6 +657,7 @@ class UploadHttpTests(unittest.TestCase):
                     restart,
                     container,
                 )
+                print("FENCED_COMPUTE_INPUT_READS_PASSED", flush=True)
                 records = sql("SELECT scope::text FROM fabric_uploads")
                 for secret in (
                     config["access_key_id"],

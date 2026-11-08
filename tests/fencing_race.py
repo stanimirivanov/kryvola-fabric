@@ -134,7 +134,7 @@ def exercise(
                 {
                     "schema_version": "1",
                     "operation": operation,
-                    "input_manifest_digests": ["a" * 64],
+                    "input_manifest_digests": [digest],
                 },
             )[0],
             200,
@@ -198,6 +198,16 @@ def exercise(
                 },
             )[0],
             200,
+        )
+        read_path = "/v1/compute-inputs/manifest"
+        read_scope = {
+            "schema_version": "1",
+            "attempt": lease["attempt"],
+            "manifest_digest": digest,
+        }
+        case.assertEqual(
+            request("POST", read_path, issue(purpose="COMPUTE_READ"), read_scope),
+            (200, canonical),
         )
         selection = {
             "schema_version": "1",
@@ -354,6 +364,10 @@ def exercise(
         if not selection_first:
             record("select:0:1-1", "REJECTED", final, "NONE" if recovery else "ACKNOWLEDGED")
 
+        case.assertEqual(
+            request("POST", read_path, issue(purpose="COMPUTE_READ"), read_scope),
+            (409, {"schema_version": "1", "code": "STALE_FENCE"}),
+        )
         case.assertEqual(post(REGISTER, execution_token, registration)[0], 409)
         case.assertEqual(select_result()[0], 409)
         case.assertEqual(post("/v1/attempts/ensure", coordinator, ensure)[0], 409)

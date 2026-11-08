@@ -1,6 +1,6 @@
-//! Scoped staging and verified metadata publication. No endpoint grants byte access.
+//! Scoped staging, verified finalization and fenced compute-input reads.
 use crate::{
-    authorization::{Authorizer, Denial},
+    authorization::{Authorizer, Denial, Scope, now_unix_ms},
     limits::{CHUNK_MAX_BYTES, CONTROL_BYTES},
     runtime_contract::{RuntimeCode, RuntimeValidator},
     upload::{ReclaimReport, UploadError, UploadStore},
@@ -8,7 +8,8 @@ use crate::{
 use axum::{
     body::{Body, to_bytes},
     extract::Request,
-    http::{Method, StatusCode, header},
+    http::{HeaderMap, Method, StatusCode, header},
+    response::{IntoResponse, Response},
 };
 use futures_util::TryStreamExt;
 use object_store::{ClientOptions, aws::AmazonS3Builder};
@@ -95,6 +96,93 @@ impl UploadApi {
             || matches!(p.as_slice(), ["", "v1", "uploads", _, "manifest"] if *method == Method::PUT)
             || matches!(p.as_slice(), ["", "v1", "uploads", _, "abort" | "finalize"] if *method == Method::POST)
     }
+    pub fn matches_read(method: &Method, path: &str) -> bool {
+        *method == Method::POST
+            && (path == "/v1/compute-inputs/manifest"
+                || path
+                    .strip_prefix("/v1/compute-inputs/parts/")
+                    .is_some_and(|index| !index.is_empty() && !index.contains('/')))
+    }
+
+    pub async fn handle_read(
+        &self,
+        request: Request,
+        authorization: (&SpiffeId, &Authorizer, u64, Instant),
+        schemas: &RuntimeValidator,
+    ) -> Response {
+        let result = self.read(request, authorization, schemas).await;
+        match result {
+            Ok(bytes) => (
+                [
+                    (header::CONTENT_TYPE, "application/octet-stream".into()),
+                    (header::CACHE_CONTROL, "no-store".into()),
+                    (header::CONTENT_LENGTH, bytes.len().to_string()),
+                ],
+                bytes,
+            )
+                .into_response(),
+            Err(failure) => {
+                let (status, body) = match failure {
+                    UploadError::Denied => deny(Denial::Policy),
+                    UploadError::NotFound => error(RuntimeCode::NotFound, StatusCode::NOT_FOUND),
+                    UploadError::AttemptExpired => {
+                        error(RuntimeCode::AttemptExpired, StatusCode::CONFLICT)
+                    }
+                    UploadError::StaleFence => error(RuntimeCode::StaleFence, StatusCode::CONFLICT),
+                    UploadError::Size => {
+                        error(RuntimeCode::PayloadTooLarge, StatusCode::PAYLOAD_TOO_LARGE)
+                    }
+                    UploadError::Integrity => invalid(),
+                    _ => error(RuntimeCode::Unavailable, StatusCode::SERVICE_UNAVAILABLE),
+                };
+                (status, [(header::CONTENT_TYPE, "application/json")], body).into_response()
+            }
+        }
+    }
+
+    async fn read(
+        &self,
+        request: Request,
+        (peer, auth, identity_expiry, deadline): (&SpiffeId, &Authorizer, u64, Instant),
+        schemas: &RuntimeValidator,
+    ) -> Result<Vec<u8>, UploadError> {
+        let (parts, body) = request.into_parts();
+        let token = bearer(&parts.headers).ok_or(UploadError::Denied)?;
+        if Instant::now() >= deadline || !now_unix_ms().is_some_and(|now| now < identity_expiry) {
+            return Err(UploadError::Denied);
+        }
+        if parts.uri.query().is_some() || parts.headers.contains_key(header::RANGE) {
+            return Err(UploadError::Integrity);
+        }
+        let path = parts.uri.path();
+        let index = if path == "/v1/compute-inputs/manifest" {
+            None
+        } else {
+            let raw = path
+                .strip_prefix("/v1/compute-inputs/parts/")
+                .ok_or(UploadError::NotFound)?;
+            Some(
+                raw.parse::<u16>()
+                    .ok()
+                    .filter(|index| *index <= 1023 && index.to_string() == raw)
+                    .ok_or(UploadError::Integrity)?,
+            )
+        };
+        let bytes = collect(body).await?;
+        let mut value = schemas
+            .decode("ReadComputeInputRequest", &bytes)
+            .map_err(|_| UploadError::Integrity)?;
+        value["purpose"] = json!("COMPUTE_READ");
+        let scope = Scope::decode(&serde_json::to_vec(&value).map_err(|_| UploadError::Integrity)?)
+            .ok_or(UploadError::Integrity)?;
+        let expires = auth
+            .redeem(peer, token, &scope)
+            .ok_or(UploadError::Denied)?;
+        self.store
+            .read_compute_input(&value, index, expires.min(identity_expiry), deadline)
+            .await
+    }
+
     pub async fn handle(
         &self,
         request: Request,
@@ -106,12 +194,7 @@ impl UploadApi {
         if !Self::matches(&parts.method, parts.uri.path()) {
             return error(RuntimeCode::NotFound, StatusCode::NOT_FOUND);
         }
-        let mut values = parts.headers.get_all(header::AUTHORIZATION).iter();
-        let token = values
-            .next()
-            .and_then(|v| v.to_str().ok())
-            .and_then(|v| v.strip_prefix("Bearer "));
-        let Some(token) = token.filter(|_| values.next().is_none()) else {
+        let Some(token) = bearer(&parts.headers) else {
             return deny(Denial::Credential);
         };
         if Instant::now() >= deadline {
@@ -230,6 +313,12 @@ impl UploadApi {
         }
     }
 }
+fn bearer(headers: &HeaderMap) -> Option<&str> {
+    let mut values = headers.get_all(header::AUTHORIZATION).iter();
+    let token = values.next()?.to_str().ok()?.strip_prefix("Bearer ")?;
+    values.next().is_none().then_some(token)
+}
+
 async fn collect(body: Body) -> Result<axum::body::Bytes, UploadError> {
     timeout(Duration::from_secs(2), to_bytes(body, CONTROL_BYTES))
         .await
