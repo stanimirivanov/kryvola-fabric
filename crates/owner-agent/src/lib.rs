@@ -13,6 +13,8 @@ use rustix::{
 };
 use zeroize::Zeroizing;
 
+pub mod approval;
+
 const MAX_ENVELOPE: usize = (65 << 20) + 40;
 const PYTHON: &str = include_str!("owner_codec.py");
 type Result<T> = std::result::Result<T, &'static str>;
@@ -71,6 +73,10 @@ impl Store {
     }
 
     fn read(&self, name: &str) -> Result<Vec<u8>> {
+        self.read_bounded(name, MAX_ENVELOPE)
+    }
+
+    fn read_bounded(&self, name: &str, limit: usize) -> Result<Vec<u8>> {
         let fd = fs::openat(
             &self.0,
             name,
@@ -83,13 +89,13 @@ impl Store {
             || stat.st_mode & 0o7777 != 0o600
             || stat.st_nlink != 1
             || FileType::from_raw_mode(stat.st_mode) != FileType::RegularFile
-            || !(1..=MAX_ENVELOPE as i64).contains(&stat.st_size)
+            || !(1..=limit as i64).contains(&stat.st_size)
         {
             return Err("OWNER_FILE");
         }
         let mut data = Vec::new();
         File::from(fd)
-            .take(MAX_ENVELOPE as u64 + 1)
+            .take(limit as u64 + 1)
             .read_to_end(&mut data)
             .map_err(|_| "OWNER_FILE")?;
         if data.len() != stat.st_size as usize {
@@ -208,6 +214,10 @@ fn capture(
 }
 
 pub fn lookup(tool: &Path, slot: &str) -> Result<Secret> {
+    lookup_for(tool, slot, "kryvola-owner-v1")
+}
+
+fn lookup_for(tool: &Path, slot: &str, application: &str) -> Result<Secret> {
     validate_slot(slot)?;
     let bus = std::env::var_os("DBUS_SESSION_BUS_ADDRESS").ok_or("OWNER_KEYSTORE")?;
     if !bus.as_encoded_bytes().starts_with(b"unix:") || bus.as_encoded_bytes().contains(&b';') {
@@ -217,7 +227,7 @@ pub fn lookup(tool: &Path, slot: &str) -> Result<Secret> {
     command.env("DBUS_SESSION_BUS_ADDRESS", bus).args([
         "lookup",
         "application",
-        "kryvola-owner-v1",
+        application,
         "slot",
         slot,
     ]);
