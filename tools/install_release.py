@@ -3,9 +3,12 @@
 import hashlib
 import io
 import platform
+import secrets
+import sys
 import tarfile
 import urllib.request
 from pathlib import Path
+from urllib.error import HTTPError, URLError
 
 ROOT = Path(__file__).resolve().parents[1]
 PINS = {
@@ -29,12 +32,32 @@ def tool(name):
     return path
 
 
+def download(url: str) -> bytes:
+    attempts = 3
+    for attempt in range(1, attempts + 1):
+        # Bypass a cached gateway failure on retries without changing the asset path.
+        request_url = url if attempt == 1 else f"{url}?download=1&retry={secrets.token_hex(8)}"
+        try:
+            with urllib.request.urlopen(request_url, timeout=60) as response:
+                return response.read((160 << 20) + 1)
+        except (TimeoutError, URLError) as error:
+            if isinstance(error, HTTPError):
+                error.close()
+                retryable = error.code in {502, 503, 504}
+            else:
+                cause = error.reason if isinstance(error, URLError) else error
+                retryable = isinstance(cause, TimeoutError)
+            if not retryable or attempt == attempts:
+                raise
+            print(f"Release tool download failed on attempt {attempt}; retrying", file=sys.stderr)
+    raise AssertionError("No release tool download attempts configured")
+
+
 def main():
     if (platform.system(), platform.machine()) != ("Linux", "x86_64"):
         raise ValueError("LINUX_X86_64_REQUIRED")
     for name, (url, digest, _) in PINS.items():
-        with urllib.request.urlopen(url, timeout=60) as response:
-            raw = response.read((160 << 20) + 1)
+        raw = download(url)
         if len(raw) > 160 << 20 or hashlib.sha256(raw).hexdigest() != digest:
             raise ValueError("RELEASE_TOOL_DOWNLOAD")
         if name == "syft":
