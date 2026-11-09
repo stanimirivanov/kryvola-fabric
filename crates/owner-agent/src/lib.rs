@@ -14,6 +14,7 @@ use rustix::{
 use zeroize::Zeroizing;
 
 pub mod approval;
+pub mod opening;
 
 const MAX_ENVELOPE: usize = (65 << 20) + 40;
 const PYTHON: &str = include_str!("owner_codec.py");

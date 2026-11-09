@@ -13,21 +13,22 @@ use super::{Result, Store, lookup_for, validate_slot};
 pub const CONTROL: usize = 65536;
 const LABEL: &str = "CONFIDENTIALITY_ONLY";
 const APPROVAL: &str = include_str!("../../../contracts/spec/canonical/v3/approval.schema.json");
-const ENVELOPE: &str = include_str!("../../../contracts/spec/canonical/v3/signature.schema.json");
+pub(super) const ENVELOPE: &str =
+    include_str!("../../../contracts/spec/canonical/v3/signature.schema.json");
 const PLAN: &str = include_str!("../../../contracts/spec/canonical/v2/plan.schema.json");
 const CONSENT: &str = include_str!("../../../contracts/spec/consent-declaration.schema.json");
 static APPROVAL_VALIDATOR: OnceLock<Option<jsonschema::Validator>> = OnceLock::new();
-static SIGNATURE_VALIDATOR: OnceLock<Option<jsonschema::Validator>> = OnceLock::new();
+pub(super) static SIGNATURE_VALIDATOR: OnceLock<Option<jsonschema::Validator>> = OnceLock::new();
 static PLAN_VALIDATOR: OnceLock<Option<jsonschema::Validator>> = OnceLock::new();
 static CONSENT_VALIDATOR: OnceLock<Option<jsonschema::Validator>> = OnceLock::new();
 
-fn canonical(value: &Value) -> Result<Vec<u8>> {
+pub(super) fn canonical(value: &Value) -> Result<Vec<u8>> {
     let mut sorted = value.clone();
     sorted.sort_all_objects();
     serde_json::to_vec(&sorted).map_err(|_| "OWNER_APPROVAL_FORMAT")
 }
 
-fn parse(bytes: &[u8]) -> Result<Value> {
+pub(super) fn parse(bytes: &[u8]) -> Result<Value> {
     if bytes.is_empty() || bytes.len() > CONTROL {
         return Err("OWNER_APPROVAL_FORMAT");
     }
@@ -38,7 +39,7 @@ fn parse(bytes: &[u8]) -> Result<Value> {
     Ok(value)
 }
 
-fn validate(
+pub(super) fn validate(
     value: &Value,
     schema: &str,
     cache: &OnceLock<Option<jsonschema::Validator>>,
@@ -56,7 +57,7 @@ fn validate(
     }
 }
 
-fn digest(domain: &[u8], bytes: &[u8]) -> String {
+pub(super) fn digest(domain: &[u8], bytes: &[u8]) -> String {
     blake3::Hasher::new()
         .update(domain)
         .update(bytes)
@@ -70,9 +71,9 @@ pub fn approval_digest(bytes: &[u8]) -> Result<String> {
     Ok(digest(b"kryvola/approval/v3\0", bytes))
 }
 
-fn preimage(header: &Value, payload: &[u8]) -> Result<Vec<u8>> {
+pub(super) fn preimage(kind: &str, header: &Value, payload: &[u8]) -> Result<Vec<u8>> {
     let header = canonical(header)?;
-    let mut message = b"kryvola/signature/approval/v3\0".to_vec();
+    let mut message = format!("kryvola/signature/{kind}/v3\0").into_bytes();
     for bytes in [header.as_slice(), payload] {
         message.extend_from_slice(&(bytes.len() as u64).to_le_bytes());
         message.extend_from_slice(bytes);
@@ -81,7 +82,8 @@ fn preimage(header: &Value, payload: &[u8]) -> Result<Vec<u8>> {
 }
 
 pub struct Policy {
-    approval: Value,
+    pub(super) approval: Value,
+    pub(super) plan: Value,
     bytes: Vec<u8>,
     header: Value,
     public_key: [u8; 32],
@@ -156,6 +158,7 @@ impl Policy {
         validate(&envelope, ENVELOPE, &SIGNATURE_VALIDATOR)?;
         Ok(Self {
             approval,
+            plan: plan_value,
             bytes,
             header,
             public_key,
@@ -215,8 +218,12 @@ impl Policy {
             return Err("OWNER_APPROVAL_KEY");
         }
         let mut envelope = self.header.clone();
-        envelope["signature"] =
-            json!(URL_SAFE_NO_PAD.encode(key.sign(&preimage(&self.header, &self.bytes)?).as_ref()));
+        envelope["signature"] = json!(
+            URL_SAFE_NO_PAD.encode(
+                key.sign(&preimage("approval", &self.header, &self.bytes)?)
+                    .as_ref()
+            )
+        );
         canonical(&json!({"assurance":LABEL,"approval":self.approval,"envelope":envelope}))
     }
 
@@ -237,7 +244,7 @@ impl Policy {
             return Err("OWNER_APPROVAL_POLICY");
         }
         UnparsedPublicKey::new(&ED25519, self.public_key)
-            .verify(&preimage(&header, &self.bytes)?, &signature)
+            .verify(&preimage("approval", &header, &self.bytes)?, &signature)
             .map_err(|_| "OWNER_APPROVAL_SIGNATURE")
     }
 }
@@ -275,7 +282,7 @@ mod tests {
         let payload = hex::decode(vector["canonical_hex"].as_str().unwrap()).unwrap();
         let mut header = vector["envelope"].clone();
         let signature = header.as_object_mut().unwrap().remove("signature").unwrap();
-        let preimage = preimage(&header, &payload).unwrap();
+        let preimage = preimage("approval", &header, &payload).unwrap();
         assert_eq!(hex::encode(&preimage), vector["preimage_hex"]);
         let public = hex::decode(fixture["public_key_hex"].as_str().unwrap()).unwrap();
         UnparsedPublicKey::new(&ED25519, public)

@@ -175,3 +175,16 @@ else:
     .unwrap();
     check("verify");
 }
+
+#[test]
+fn authorized_open_requires_an_authenticated_unix_peer() {
+    use std::process::{Command, Stdio};
+    let output = Command::new(env!("CARGO_BIN_EXE_kryvola-owner-agent"))
+        .args(["open-result", "/missing", "/missing", "owner"])
+        .stdin(Stdio::piped())
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert_eq!(output.stderr, b"OWNER_OPEN_REJECTED\n");
+}

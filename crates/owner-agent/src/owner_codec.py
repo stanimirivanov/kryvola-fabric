@@ -7,6 +7,7 @@ import resource
 import sys
 
 MAX_ENVELOPE = (65 << 20) + 40
+MAX_PAIR = 2 * ((1 << 20) + 8)
 
 
 def main() -> None:
@@ -22,6 +23,21 @@ def main() -> None:
     operation = sys.argv[1]
     stream = sys.stdin.buffer
     local, local_context, recovery, backup_context = (stream.read(32) for _ in range(4))
+    if operation == "open-result":
+        size = int.from_bytes(stream.read(8), "little")
+        if not 1 <= size <= MAX_ENVELOPE:
+            raise ValueError
+        sealed = stream.read(size)
+        pair = stream.read(MAX_PAIR + 1)
+        if len(sealed) != size or not 1 <= len(pair) <= MAX_PAIR:
+            raise ValueError
+        result = owner.OwnerKey.restore(local, local_context, sealed).open_result(
+            pair, recovery, backup_context
+        )
+        if len(result) != 2:
+            raise ValueError
+        sys.stdout.buffer.write(result)
+        return
     sealed = stream.read(MAX_ENVELOPE + 1)
     if len(sealed) > MAX_ENVELOPE:
         raise ValueError
