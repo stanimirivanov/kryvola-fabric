@@ -699,3 +699,10 @@ The [consumer read routes](released-output-reads.md) enforce the merged Spec
 contract with one-use recipient grants and an authoritative signed release
 check on every read. Fabric serves verified bytes from the bound immutable
 upload through the workload mTLS listener.
+
+## M1-PR26 authorized owner opening
+
+The [owner opening command](local-result-opening.md) verifies the signed
+release and current owner approval, checks live released-output authority,
+and opens the exact ciphertext through the pinned owner wheel. It returns
+the two-byte result only over the authenticated local peer connection.

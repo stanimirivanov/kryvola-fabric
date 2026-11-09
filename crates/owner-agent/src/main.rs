@@ -43,6 +43,13 @@ fn run() -> Result<(), &'static str> {
     let [action, root, python, slot] = args.as_slice() else {
         return Err("OWNER_ARGUMENT");
     };
+    if action == "open-result" {
+        return kryvola_owner_agent::opening::run(
+            Path::new(root),
+            Path::new(python),
+            slot.to_str().unwrap_or_default(),
+        );
+    }
     let slot = slot.to_str().ok_or("OWNER_SLOT")?;
     validate_slot(slot)?;
     let action = match action.to_str() {

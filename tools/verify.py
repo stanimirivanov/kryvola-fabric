@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -35,6 +36,18 @@ def main() -> None:
         run(sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v")
         if REPO in {"kryvola-fabric", "kryvola-engines"}:
             run("cargo", "test", "--locked", "--workspace")
+        if REPO == "kryvola-fabric" and os.environ.get("KRYVOLA_OWNER_TEST_PYTHON"):
+            run(
+                "cargo",
+                "test",
+                "--locked",
+                "-p",
+                "kryvola-owner-agent",
+                "--lib",
+                "live_authorized_native_open",
+                "--",
+                "--ignored",
+            )
         if REPO == "kryvola-engines":
             run("cmake", "-S", "cpp", "-B", "build/cpp", "-G", "Ninja", "-DCMAKE_BUILD_TYPE=Debug")
             run("cmake", "--build", "build/cpp")
