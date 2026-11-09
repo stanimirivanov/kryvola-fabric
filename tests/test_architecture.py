@@ -27,7 +27,9 @@ class ArchitectureTests(unittest.TestCase):
         data = b"fixture\n"
         (vendor / "data.txt").write_bytes(data)
         entries = {"data.txt": hashlib.sha256(data).hexdigest()}
-        for name in REQUIRED_ARTIFACTS:
+        for name in REQUIRED_ARTIFACTS | {
+            n for n, bundle in RUNTIME_ASSETS.items() if bundle == "spec"
+        }:
             target = vendor / name
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(data)
@@ -54,6 +56,7 @@ class ArchitectureTests(unittest.TestCase):
         packaged = root / "src/kryvola_fabric/_spec"
         packaged.mkdir(parents=True)
         for name, bundle in RUNTIME_ASSETS.items():
+            (packaged / name).parent.mkdir(parents=True, exist_ok=True)
             (packaged / name).write_bytes(
                 ((vendor if bundle == "spec" else native) / name).read_bytes()
             )

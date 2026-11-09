@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "enum": [
+        "1"
+      ]
+    },
+    "outcome": {
+      "type": "string",
+      "enum": [
+        "COMPUTE_SELECTED"
+      ]
+    },
+    "execution_id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}(?![\\s\\S])"
+    },
+    "output_manifest_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+    }
+  },
+  "required": [
+    "schema_version",
+    "outcome",
+    "execution_id",
+    "output_manifest_digest"
+  ],
+  "additionalProperties": false
+}
