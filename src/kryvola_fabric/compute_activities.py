@@ -36,6 +36,11 @@ SCHEMAS = {
                 "RegisterExecutionRequest",
                 "SelectResultRequest",
                 "SelectResultResponse",
+                "CancelOperationRequest",
+                "CancellationPending",
+                "Cancelled",
+                "FenceRecoveryRequest",
+                "RecoveryFenceResponse",
             )
         },
     }.items()
@@ -125,7 +130,20 @@ class Registry:
             raw = reply.read(PAYLOAD_MAX + 1)
             if reply.status >= 500:
                 raise ApplicationError("COMPUTE_UNAVAILABLE")
-            if len(raw) > PAYLOAD_MAX or reply.status != (204 if action == "REGISTER" else 200):
+            allowed = (
+                (204,)
+                if action == "REGISTER"
+                else (200, 202)
+                if action in {"CANCEL", "ADMIN_CANCEL"}
+                else (200,)
+            )
+            if len(raw) > PAYLOAD_MAX:
+                raise ApplicationError("COMPUTE_REJECTED", non_retryable=True)
+            if reply.status == 409:
+                error = json.loads(raw)
+                if isinstance(error, dict) and error.get("code") == "ATTEMPT_EXPIRED":
+                    raise ApplicationError("ATTEMPT_EXPIRED", non_retryable=True)
+            if reply.status not in allowed:
                 raise ApplicationError("COMPUTE_REJECTED", non_retryable=True)
             return json.loads(raw) if raw else {}
         except OSError, http.client.HTTPException:
@@ -173,21 +191,26 @@ class ComputeActivities:
                 "schema_version": "1",
                 **identity,
                 "workflow_epoch": operation["workflow_epoch"],
-                "attempt_epoch": "1",
+                "attempt_epoch": identity.get("attempt_epoch", "1"),
             },
         }
         checked("EnsureAttemptRequest", requested)
-        lease = checked(
-            "EnsureAttemptResponse",
-            await asyncio.to_thread(
-                self.registry.call,
-                "ENSURE",
-                "POST",
-                "/v1/attempts/ensure",
-                requested["attempt"],
-                requested,
-            ),
-        )
+        try:
+            lease = checked(
+                "EnsureAttemptResponse",
+                await asyncio.to_thread(
+                    self.registry.call,
+                    "ENSURE",
+                    "POST",
+                    "/v1/attempts/ensure",
+                    requested["attempt"],
+                    requested,
+                ),
+            )
+        except ApplicationError as error:
+            if "attempt_epoch" in identity and error.message == "ATTEMPT_EXPIRED":
+                return {"state": "ATTEMPT_EXPIRED", "operation": operation}
+            raise
         attempt = lease["attempt"]
         if any(attempt[key] != value for key, value in requested["attempt"].items()):
             raise ApplicationError("COMPUTE_REJECTED", non_retryable=True)
@@ -202,6 +225,8 @@ class ComputeActivities:
         if saved["operation"] != operation:
             raise ApplicationError("COMPUTE_REJECTED", non_retryable=True)
         execution = "exec-" + workflow_id(attempt["tenant_scope"], attempt["operation_id"])[8:]
+        if attempt["attempt_epoch"] != "1":
+            execution += "-" + attempt["attempt_epoch"]
         register = checked(
             "RegisterExecutionRequest",
             {
