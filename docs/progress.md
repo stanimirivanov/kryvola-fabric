@@ -664,3 +664,9 @@ Engines owner wheel and Secret Service to store and recover sealed TFHE keys.
 The recovery fixture uses a separate wrapping key on the destination, checks
 that an existing ciphertext still opens in the owner fixture, and exercises
 tampered backup and unavailable-keystore failures.
+
+## M1-PR20 exact owner plan approvals
+
+The [owner approval commands](owner-approval.md) sign canonical v3 approvals
+against the reviewed local plan and confidentiality-only consent. Local
+verification checks the exact signed context and persistent revocation.

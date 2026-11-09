@@ -9,6 +9,10 @@ publish = false
 [dependencies]
 blake3 = "=1.8.7"
 hex = "=0.4.3"
+base64 = "=0.22.1"
+jsonschema = { version = "=0.60.1", default-features = false }
+ring = "=0.17.14"
+serde_json = "=1.0.154"
 rustix = { version = "=1.1.5", features = ["fs", "process"] }
 zeroize = "=1.9.1"
 
