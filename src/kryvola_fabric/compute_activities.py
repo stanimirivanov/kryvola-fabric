@@ -55,7 +55,7 @@ def checked(name: str, value: Any) -> Document:
 
 
 async def start_from_notification(
-    client: Client, task_queue: str, payload: bytes, *, ray: bool = False
+    client: Client, task_queue: str, payload: bytes, *, ray: bool = False, release: bool = False
 ) -> WorkflowHandle | None:
     """Acknowledge the notification only after this call returns successfully."""
     if len(payload) > PAYLOAD_MAX or client.data_converter != DATA_CONVERTER:
@@ -78,7 +78,10 @@ async def start_from_notification(
     try:
         return await client.start_workflow(
             ComputeWorkflow.run,
-            {**identity, "ray": True} if ray else identity,
+            {
+                **identity,
+                **{key: True for key, enabled in (("ray", ray), ("release", release)) if enabled},
+            },
             id=identifier,
             task_queue=task_queue,
             id_reuse_policy=WorkflowIDReusePolicy.REJECT_DUPLICATE,

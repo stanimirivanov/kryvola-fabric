@@ -1248,3 +1248,20 @@ mod messaging;
 
 #[path = "registry/broker_crash.rs"]
 mod broker_crash;
+
+#[test]
+fn release_disclosure_id_matches_spec_and_excludes_epochs() {
+    use kryvola_fabric_core::registry::disclosure_id;
+    let fixture: Value = serde_json::from_str(include_str!(
+        "../../../contracts/spec/fixtures/canonical-disclosure-v3.json"
+    ))
+    .unwrap();
+    assert_eq!(
+        disclosure_id(&fixture["identity"]).unwrap(),
+        fixture["disclosure_id"]
+    );
+    assert!(disclosure_id(&fixture["authorization"]).is_err());
+}
+
+#[path = "registry/release.rs"]
+mod release;

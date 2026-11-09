@@ -17,7 +17,7 @@ pub(crate) struct SignedReceipt {
     pub digest: String,
 }
 
-fn canonical(
+pub(crate) fn canonical(
     encoded: &Value,
     limit: usize,
     validator: &'static OnceLock<Option<jsonschema::Validator>>,
@@ -57,48 +57,24 @@ impl SignedReceipt {
             &RECEIPT,
             include_str!("../../../contracts/spec/canonical/v3/receipt.schema.json"),
         )?;
-        let (envelope, mut header) = canonical(
-            &body["signature_base64url"],
-            2048,
-            &SIGNATURE,
-            include_str!("../../../contracts/spec/canonical/v3/signature.schema.json"),
-        )?;
         let timestamp = |field: &str| value[field].as_str().and_then(|s| s.parse::<u64>().ok());
-        if timestamp("completed_unix_ms") < timestamp("started_unix_ms")
-            || header["payload_kind"] != "receipt"
-        {
+        if timestamp("completed_unix_ms") < timestamp("started_unix_ms") {
             return Err(RegistryError::InvalidIntent);
         }
-        let mut hash = blake3::Hasher::new();
-        let digest = hash
-            .update(b"kryvola/receipt/v3\0")
-            .update(&payload)
-            .finalize()
-            .to_hex()
-            .to_string();
-        if header["payload_digest"] != digest
-            || header["signer"] != trust.signer
-            || value["signer"] != trust.signer
-            || header["key_id"] != trust.key_id
-            || header["key_epoch"] != trust.key_epoch
-        {
+        if value["signer"] != trust.signer {
             return Err(RegistryError::Forbidden);
         }
-        let signature = header
-            .as_object_mut()
-            .and_then(|fields| fields.remove("signature"))
-            .and_then(|encoded| URL_SAFE_NO_PAD.decode(encoded.as_str()?).ok())
-            .ok_or(RegistryError::InvalidIntent)?;
-        let key = hex::decode(&trust.public_key_hex).map_err(|_| RegistryError::Forbidden)?;
-        let metadata = serde_json::to_vec(&header).map_err(|_| RegistryError::InvalidIntent)?;
-        let mut preimage = b"kryvola/signature/receipt/v3\0".to_vec();
-        for bytes in [&metadata, &payload] {
-            preimage.extend_from_slice(&(bytes.len() as u64).to_le_bytes());
-            preimage.extend_from_slice(bytes);
-        }
-        UnparsedPublicKey::new(&ED25519, key)
-            .verify(&preimage, &signature)
-            .map_err(|_| RegistryError::Forbidden)?;
+        let (envelope, digest) = verify_signature(
+            &body["signature_base64url"],
+            &payload,
+            "receipt",
+            (
+                &trust.signer,
+                &trust.key_id,
+                &trust.key_epoch,
+                &trust.public_key_hex,
+            ),
+        )?;
         Ok(Self {
             payload,
             envelope,
@@ -106,4 +82,56 @@ impl SignedReceipt {
             digest,
         })
     }
+}
+
+pub(crate) fn commitment(kind: &str, version: u8, payload: &[u8]) -> String {
+    blake3::Hasher::new()
+        .update(format!("kryvola/{kind}/v{version}\0").as_bytes())
+        .update(payload)
+        .finalize()
+        .to_hex()
+        .to_string()
+}
+
+pub(crate) fn signature_preimage(kind: &str, metadata: &[u8], payload: &[u8]) -> Vec<u8> {
+    let mut preimage = format!("kryvola/signature/{kind}/v3\0").into_bytes();
+    for bytes in [metadata, payload] {
+        preimage.extend_from_slice(&(bytes.len() as u64).to_le_bytes());
+        preimage.extend_from_slice(bytes);
+    }
+    preimage
+}
+
+pub(crate) fn verify_signature(
+    signature: &Value,
+    payload: &[u8],
+    kind: &str,
+    trust: (&str, &str, &str, &str),
+) -> Result<(Vec<u8>, String), RegistryError> {
+    let (envelope, mut header) = canonical(
+        signature,
+        2048,
+        &SIGNATURE,
+        include_str!("../../../contracts/spec/canonical/v3/signature.schema.json"),
+    )?;
+    let digest = commitment(kind, 3, payload);
+    if header["payload_kind"] != kind
+        || header["payload_digest"] != digest
+        || header["signer"] != trust.0
+        || header["key_id"] != trust.1
+        || header["key_epoch"] != trust.2
+    {
+        return Err(RegistryError::Forbidden);
+    }
+    let signature = header
+        .as_object_mut()
+        .and_then(|fields| fields.remove("signature"))
+        .and_then(|encoded| URL_SAFE_NO_PAD.decode(encoded.as_str()?).ok())
+        .ok_or(RegistryError::InvalidIntent)?;
+    let key = hex::decode(trust.3).map_err(|_| RegistryError::Forbidden)?;
+    let metadata = serde_json::to_vec(&header).map_err(|_| RegistryError::InvalidIntent)?;
+    UnparsedPublicKey::new(&ED25519, key)
+        .verify(&signature_preimage(kind, &metadata, payload), &signature)
+        .map_err(|_| RegistryError::Forbidden)?;
+    Ok((envelope, digest))
 }
