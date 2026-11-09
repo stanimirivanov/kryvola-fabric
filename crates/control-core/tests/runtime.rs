@@ -99,3 +99,37 @@ fn released_output_routes_use_closed_published_scope() {
         "/v1/released-outputs/manifest"
     ));
 }
+
+#[test]
+fn approved_submission_routes_require_the_published_boundary() {
+    use axum::http::Method;
+    use kryvola_fabric_core::{runtime_contract::RuntimeValidator, upload_http::UploadApi};
+    let schema = RuntimeValidator::new().unwrap();
+    let control: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../contracts/spec/fixtures/control.json"
+    ))
+    .unwrap();
+    let request = serde_json::json!({"schema_version":"1","operation":control["Operation"],
+        "approval_digest":"a".repeat(64),"evaluation_key_manifest_digest":"b".repeat(64),
+        "input_manifest_digests":["c".repeat(64)]});
+    assert!(
+        schema
+            .decode(
+                "AdmitApprovedOperationRequest",
+                request.to_string().as_bytes()
+            )
+            .is_ok()
+    );
+    assert!(UploadApi::matches_submission(
+        &Method::POST,
+        "/v1/operations/admit"
+    ));
+    assert!(UploadApi::matches_submission(
+        &Method::PUT,
+        "/v1/input-uploads/id/parts/0"
+    ));
+    assert!(!UploadApi::matches_submission(
+        &Method::POST,
+        "/v1/operations"
+    ));
+}

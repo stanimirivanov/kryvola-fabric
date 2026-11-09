@@ -9,6 +9,8 @@ use std::{
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
+mod submission;
+pub(crate) use submission::SubmissionGrant;
 mod consumer;
 pub(crate) use consumer::ConsumerGrant;
 mod output;
@@ -97,6 +99,8 @@ struct Policy {
     output_grants: Vec<OutputAuthority>,
     #[serde(default)]
     consumer_grants: Vec<ConsumerGrant>,
+    #[serde(default)]
+    owner_submission_grants: Vec<SubmissionGrant>,
 }
 
 #[derive(Deserialize)]
@@ -322,6 +326,7 @@ impl Authorizer {
                 + policy.receipt_grants.len()
                 + policy.output_grants.len()
                 + policy.consumer_grants.len()
+                + policy.owner_submission_grants.len()
                 > MAX_GRANTS
             || !policy.consumer_credentials_separate()
         {

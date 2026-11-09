@@ -76,6 +76,12 @@ async fn handle(
     uploads: Option<&UploadApi>,
 ) -> Response {
     if let (Some(authorization), Some(api)) = (peer, uploads)
+        && UploadApi::matches_submission(request.method(), request.uri().path())
+    {
+        let (status, body) = api.handle_submission(request, authorization, runtime).await;
+        return reply(status, body);
+    }
+    if let (Some(authorization), Some(api)) = (peer, uploads)
         && UploadApi::matches_output_grant(request.method(), request.uri().path())
     {
         return api
@@ -373,7 +379,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     if let [mode, db, value] = args.as_slice() {
         match mode.as_str() {
             "--commit-release" => return release::commit(db, value).await,
-            "--revoke-release-approval" => return release::revoke(db, value).await,
+            "--revoke-release-approval" | "--revoke-compute-approval" => {
+                return release::revoke(db, value).await;
+            }
             _ => {}
         }
     }

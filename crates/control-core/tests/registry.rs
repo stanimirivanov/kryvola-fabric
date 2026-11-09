@@ -1265,3 +1265,6 @@ fn release_disclosure_id_matches_spec_and_excludes_epochs() {
 
 #[path = "registry/release.rs"]
 mod release;
+
+#[path = "registry/submission.rs"]
+mod submission;

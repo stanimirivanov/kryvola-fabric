@@ -26,6 +26,7 @@ use std::{
 use tokio::time::timeout;
 use tokio_util::io::StreamReader;
 
+mod submission;
 type Reply = (StatusCode, String);
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]

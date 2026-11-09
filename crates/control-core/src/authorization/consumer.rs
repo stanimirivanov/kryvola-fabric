@@ -26,6 +26,10 @@ impl Policy {
         self.consumer_grants
             .iter()
             .all(|g| hashes.insert(&g.token_sha256))
+            && self
+                .owner_submission_grants
+                .iter()
+                .all(|g| hashes.insert(&g.token_sha256))
     }
 }
 

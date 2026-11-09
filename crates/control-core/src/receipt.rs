@@ -27,7 +27,7 @@ pub(crate) fn canonical(
     let raw = URL_SAFE_NO_PAD
         .decode(encoded)
         .map_err(|_| RegistryError::InvalidIntent)?;
-    if raw.len() > limit || !raw.is_ascii() || URL_SAFE_NO_PAD.encode(&raw) != encoded {
+    if raw.len() > limit || URL_SAFE_NO_PAD.encode(&raw) != encoded {
         return Err(RegistryError::InvalidIntent);
     }
     let mut value: Value =
@@ -39,7 +39,7 @@ pub(crate) fn canonical(
         })
         .as_ref()
         .ok_or(RegistryError::Unavailable)?;
-    // These schemas permit ASCII strings, arrays and objects, without JSON numbers.
+    // These schemas constrain the canonical value and its permitted strings.
     // Comparing sorted compact JSON also rejects duplicate object keys.
     if !validator.is_valid(&value)
         || serde_json::to_vec(&value).map_err(|_| RegistryError::InvalidIntent)? != raw
