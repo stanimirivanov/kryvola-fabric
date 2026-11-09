@@ -69,17 +69,37 @@ impl UploadStore {
         .fetch_optional(&mut *tx)
         .await?
         .ok_or(UploadError::NotFound)?;
+        let bytes = self
+            .verified_read(
+                (&id, canonical),
+                (tenant, &context, digest),
+                part,
+                check_live,
+            )
+            .await?;
+        check_live()?;
+        tx.commit().await?;
+        check_live()?;
+        Ok(bytes)
+    }
+    pub(super) async fn verified_read(
+        &self,
+        (id, canonical): (&str, Option<Vec<u8>>),
+        (tenant, context, digest): (Option<&str>, &str, &str),
+        part: Option<u16>,
+        check_live: impl Fn() -> Result<()>,
+    ) -> Result<Vec<u8>> {
         let canonical = canonical.ok_or(UploadError::Unavailable)?;
         if finalize::digest(b"kryvola/manifest/v2\0", &[&canonical]) != digest {
             return Err(UploadError::Unavailable);
         }
         let manifest = finalize::manifest(&canonical).map_err(|_| UploadError::Unavailable)?;
         if manifest["tenant_scope"].as_str() != tenant
-            || manifest["key_context_digest"].as_str() != Some(&context)
+            || manifest["key_context_digest"].as_str() != Some(context)
         {
             return Err(UploadError::Denied);
         }
-        let bytes = if let Some(index) = part {
+        Ok(if let Some(index) = part {
             let chunk = manifest["ordered_chunk_entries"]
                 .get(usize::from(index))
                 .ok_or(UploadError::NotFound)?;
@@ -110,10 +130,6 @@ impl UploadStore {
             bytes
         } else {
             canonical
-        };
-        check_live()?;
-        tx.commit().await?;
-        check_live()?;
-        Ok(bytes)
+        })
     }
 }

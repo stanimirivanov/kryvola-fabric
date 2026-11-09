@@ -15,6 +15,7 @@ mod compute_read;
 pub(crate) mod finalize;
 mod multipart;
 mod output;
+mod release_read;
 mod retention;
 use crate::{
     authorization::UploadPermit,

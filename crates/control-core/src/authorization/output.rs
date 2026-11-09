@@ -10,7 +10,7 @@ const MAX_OUTSTANDING_OUTPUT_GRANTS: usize = 256;
 #[serde(deny_unknown_fields)]
 pub(crate) struct OutputAuthority {
     spiffe_id: String,
-    token_sha256: String,
+    pub(super) token_sha256: String,
     attempt: Attempt,
     execution_id: String,
     expires_unix_ms: u64,

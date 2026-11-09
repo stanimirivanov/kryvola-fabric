@@ -518,6 +518,13 @@ def run(folder: Path) -> None:
         )
         check_registry(
             folder,
+            "release::released_output_reads",
+            FABRIC_FIXTURE_S3_ENDPOINT=f"http://{endpoint}",
+            AWS_ACCESS_KEY_ID=env["AWS_ACCESS_KEY_ID"],
+            AWS_SECRET_ACCESS_KEY=env["AWS_SECRET_ACCESS_KEY"],
+        )
+        check_registry(
+            folder,
             "bounded_uploads",
             FABRIC_FIXTURE_S3_ENDPOINT=f"http://{endpoint}",
             AWS_ACCESS_KEY_ID=env["AWS_ACCESS_KEY_ID"],

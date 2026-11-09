@@ -692,3 +692,10 @@ artifact, canonical signed receipt, current owner approval and explicit
 workflow decision to one durable disclosure identity. The live gates
 exercise workflow replay and concurrent PostgreSQL decisions, including
 release after the dispatch lease expires.
+
+## M1-PR25 release-bound artifact reads
+
+The [consumer read routes](released-output-reads.md) enforce the merged Spec
+contract with one-use recipient grants and an authoritative signed release
+check on every read. Fabric serves verified bytes from the bound immutable
+upload through the workload mTLS listener.
