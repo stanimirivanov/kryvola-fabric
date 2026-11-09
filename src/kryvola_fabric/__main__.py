@@ -10,7 +10,7 @@ def main() -> None:
                 "component": "kryvola-fabric",
                 "status": "foundation",
                 "workflow_owner": "Temporal Python workflows (not implemented)",
-                "compute_scheduler": "Ray (not implemented)",
+                "compute_scheduler": "Ray Jobs adapter (requires deployment configuration)",
                 "private_key_custody": "owner domain only",
                 "execution_available": False,
             },

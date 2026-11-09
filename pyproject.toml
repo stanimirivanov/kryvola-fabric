@@ -24,6 +24,11 @@ target-version = "py314"
 line-length = 100
 extend-exclude = ["**/_spec/**", "contracts", "build", "target", "dist"]
 
+[tool.ruff.per-file-target-version]
+"src/kryvola_fabric/control.py" = "py312"
+"src/kryvola_fabric/ray_dispatch.py" = "py312"
+"src/kryvola_fabric/ray_worker.py" = "py312"
+
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
