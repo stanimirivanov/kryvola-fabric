@@ -656,3 +656,11 @@ durably binds reservations to the execution and enforces identical
 retries without duplicate quota usage. Removal of an upload retains
 its reservation binding. Scoped uploads reject legacy mutation grants
 and receipts for other executions.
+
+## M1-PR19 recoverable owner custody
+
+The isolated Linux [owner custody agent](owner-custody.md) uses the merged
+Engines owner wheel and Secret Service to store and recover sealed TFHE keys.
+The recovery fixture uses a separate wrapping key on the destination, checks
+that an existing ciphertext still opens in the owner fixture, and exercises
+tampered backup and unavailable-keystore failures.
