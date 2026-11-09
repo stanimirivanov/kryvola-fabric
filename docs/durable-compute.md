@@ -39,5 +39,5 @@ Provide the TLS context and short-lived registry credentials out of band.
 The full gate runs the real Temporal server and replays history against
 a controlled registry that commits selection before losing completion.
 The Fabric runtime suite separately verifies the published registry routes
-and live fencing. Workflow migration, epoch recovery, and release remain
-separate tasks.
+and live fencing. See [Compute workflow recovery](workflow-recovery.md) for
+replay compatibility, attempt advancement and fence-first reconciliation.

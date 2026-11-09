@@ -51,6 +51,11 @@ RUNTIME_ASSETS.update(
                 "RegisterExecutionRequest",
                 "SelectResultRequest",
                 "SelectResultResponse",
+                "CancelOperationRequest",
+                "CancellationPending",
+                "Cancelled",
+                "FenceRecoveryRequest",
+                "RecoveryFenceResponse",
             )
         },
     }
