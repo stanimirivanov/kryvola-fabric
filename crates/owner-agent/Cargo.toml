@@ -1,0 +1,19 @@
+[package]
+name = "kryvola-owner-agent"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+blake3 = "=1.8.7"
+hex = "=0.4.3"
+rustix = { version = "=1.1.5", features = ["fs", "process"] }
+zeroize = "=1.9.1"
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+tempfile = "=3.27.0"
