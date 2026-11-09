@@ -17,6 +17,7 @@ from temporalio.common import WorkflowIDReusePolicy
 from temporalio.exceptions import ApplicationError, WorkflowAlreadyStartedError
 
 from .compute_workflow import DATA_CONVERTER, PAYLOAD_MAX, ComputeWorkflow, workflow_id
+from .ray_dispatch import RayDispatcher, RayUnavailable
 
 Document = dict[str, Any]
 Token = Callable[[str, Document], str]
@@ -54,7 +55,7 @@ def checked(name: str, value: Any) -> Document:
 
 
 async def start_from_notification(
-    client: Client, task_queue: str, payload: bytes
+    client: Client, task_queue: str, payload: bytes, *, ray: bool = False
 ) -> WorkflowHandle | None:
     """Acknowledge the notification only after this call returns successfully."""
     if len(payload) > PAYLOAD_MAX or client.data_converter != DATA_CONVERTER:
@@ -77,7 +78,7 @@ async def start_from_notification(
     try:
         return await client.start_workflow(
             ComputeWorkflow.run,
-            identity,
+            {**identity, "ray": True} if ray else identity,
             id=identifier,
             task_queue=task_queue,
             id_reuse_policy=WorkflowIDReusePolicy.REJECT_DUPLICATE,
@@ -218,6 +219,15 @@ class ComputeActivities:
 
     @activity.defn(name="compute_dispatch")
     async def dispatch(self, prepared: Document) -> Document:
+        return await self._dispatch(prepared)
+
+    @activity.defn(name="compute_ray_dispatch")
+    async def dispatch_ray(self, prepared: Document) -> Document:
+        if not isinstance(self.dispatcher, RayDispatcher):
+            raise ApplicationError("COMPUTE_REJECTED", non_retryable=True)
+        return await self._dispatch(prepared)
+
+    async def _dispatch(self, prepared: Document) -> Document:
         operation, attempt = prepared["operation"], prepared["attempt"]
         saved = await self._lookup({key: attempt[key] for key in ("tenant_scope", "operation_id")})
         if saved["public_status"] is not None:
@@ -250,6 +260,8 @@ class ComputeActivities:
                     activity.heartbeat("DISPATCHING")
             try:
                 candidate = await task
+            except RayUnavailable:
+                raise ApplicationError("COMPUTE_UNAVAILABLE") from None
             except Exception:
                 candidate = None
         finally:

@@ -4,8 +4,8 @@ Install Fabric with the `workflow` extra and configure both the Temporal
 client and workers with `compute_workflow.DATA_CONVERTER`. Register
 `ComputeWorkflow` and the three bound methods of `ComputeActivities`.
 The caller supplies an authenticated registry connection and the physical
-dispatcher. This slice defines the dispatcher boundary. Ray integration
-belongs to M1-PR23.
+dispatcher. For the isolated Ray adapter, see
+[Fenced Ray dispatch](ray-dispatch.md).
 
 Pass committed v2 notifications to `start_from_notification`. Only
 `operation_created` starts a workflow. Its ID derives from tenant and

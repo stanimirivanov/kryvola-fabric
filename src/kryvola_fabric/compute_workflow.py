@@ -82,14 +82,14 @@ async def _prepare(identity: dict) -> dict:
     )
 
 
-async def _complete(prepared: dict) -> dict[str, str]:
+async def _complete(prepared: dict, *, ray: bool = False) -> dict[str, str]:
     candidate = await workflow.execute_activity(
-        "compute_dispatch",
+        "compute_ray_dispatch" if ray else "compute_dispatch",
         prepared,
         result_type=dict,
         start_to_close_timeout=timedelta(seconds=30),
         heartbeat_timeout=timedelta(seconds=12),
-        retry_policy=RetryPolicy(maximum_attempts=1),
+        retry_policy=RetryPolicy(maximum_attempts=2 if ray else 1),
     )
     if candidate["state"] != "CANDIDATE":
         return {"outcome": candidate["state"]}
@@ -154,6 +154,8 @@ class ComputeWorkflow:
             return await _complete(prepared)
 
         identity = {key: state[key] for key in ("tenant_scope", "operation_id")}
+        ray = state.get("ray") is True
+        checkpoint = {**identity, "ray": True} if ray else identity
         epoch = state.get("attempt_epoch", "1")
         binding = state.get("binding")
         prepared = state.get("prepared")
@@ -173,14 +175,14 @@ class ComputeWorkflow:
                     if self._should_rollover():
                         workflow.continue_as_new(
                             {
-                                **identity,
+                                **checkpoint,
                                 "attempt_epoch": epoch,
                                 "binding": binding,
                                 "prepared": prepared,
                             }
                         )
                     try:
-                        return await _complete(prepared)
+                        return await _complete(prepared, ray=ray)
                     except ActivityError as error:
                         if not _expired(error):
                             raise
@@ -191,7 +193,7 @@ class ComputeWorkflow:
             if self._next_epoch is None:
                 workflow.continue_as_new(
                     {
-                        **identity,
+                        **checkpoint,
                         "attempt_epoch": epoch,
                         "binding": binding,
                         "expired": True,

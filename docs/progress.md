@@ -677,3 +677,10 @@ The [Temporal compute workflow](durable-compute.md) starts once per committed
 operation, bounds application history payloads, and retries exact selection
 from recorded candidate metadata. The live Temporal fixture covers duplicate
 notifications, lost completion and history replay.
+
+## M1-PR23 fenced Ray dispatch
+
+The [Ray Jobs adapter](ray-dispatch.md) attaches to the deterministic job
+identity after an ambiguous submission. The live gate exercises the pinned
+scheduler, separate execution namespaces and the Engine RPC boundary with
+controlled Engine responses.

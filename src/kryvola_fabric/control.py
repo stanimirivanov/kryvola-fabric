@@ -118,11 +118,21 @@ def decode_control(kind: str, payload: bytes, temporal: bool = False) -> dict[st
         if not _consistent(value):
             raise ValueError
         result = value
-    except ValueError, KeyError, TypeError, DecodeError, ValidationError:
+    except (ValueError, KeyError, TypeError, DecodeError, ValidationError):
         pass
     if result is None:
         raise ControlError("INVALID_CONTROL")
     return result
+
+
+def encode_control(kind: str, value: dict[str, Any]) -> bytes:
+    """Encode a checked control document with the pinned descriptor."""
+    message = message_factory.GetMessageClass(
+        _POOL.FindMessageTypeByName("kryvola.spec.v1." + kind)
+    )()
+    payload = json_format.ParseDict(value, message).SerializeToString(deterministic=True)
+    decode_control(kind, payload)
+    return payload
 
 
 def temporal_call(payloads: list[tuple[str, bytes]], metadata: bytes = b"") -> list[dict[str, Any]]:
