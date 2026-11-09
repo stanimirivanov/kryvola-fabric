@@ -67,6 +67,9 @@ dependencies = [
 conformance = [
     { name = "temporalio" },
 ]
+workflow = [
+    { name = "temporalio" },
+]
 
 [package.dev-dependencies]
 dev = [
@@ -80,8 +83,9 @@ requires-dist = [
     { name = "jsonschema", specifier = "==4.26.0" },
     { name = "protobuf", specifier = "==7.35.1" },
     { name = "temporalio", marker = "extra == 'conformance'", specifier = "==1.35.0" },
+    { name = "temporalio", marker = "extra == 'workflow'", specifier = "==1.35.0" },
 ]
-provides-extras = ["conformance"]
+provides-extras = ["workflow", "conformance"]
 
 [package.metadata.requires-dev]
 dev = [

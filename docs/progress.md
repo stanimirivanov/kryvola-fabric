@@ -670,3 +670,10 @@ tampered backup and unavailable-keystore failures.
 The [owner approval commands](owner-approval.md) sign canonical v3 approvals
 against the reviewed local plan and confidentiality-only consent. Local
 verification checks the exact signed context and persistent revocation.
+
+## M1-PR21 durable logical compute
+
+The [Temporal compute workflow](durable-compute.md) starts once per committed
+operation, bounds application history payloads, and retries exact selection
+from recorded candidate metadata. The live Temporal fixture covers duplicate
+notifications, lost completion and history replay.

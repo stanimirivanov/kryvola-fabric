@@ -39,6 +39,22 @@ REQUIRED_ARTIFACTS = {
 }
 REQUIRED_NATIVE_ARTIFACTS = {"descriptor.bin", "schemas.json", "vectors.json", "fixtures.json"}
 RUNTIME_ASSETS = {"descriptor.bin": "native", "schemas.json": "native", "limits.json": "spec"}
+RUNTIME_ASSETS.update(
+    {
+        "notifications/v2/Notification.schema.json": "spec",
+        **{
+            f"runtime/{name}.schema.json": "spec"
+            for name in (
+                "OperationResponse",
+                "EnsureAttemptRequest",
+                "EnsureAttemptResponse",
+                "RegisterExecutionRequest",
+                "SelectResultRequest",
+                "SelectResultResponse",
+            )
+        },
+    }
+)
 
 
 def is_foreign(name: str, forbidden: set[str]) -> bool:
