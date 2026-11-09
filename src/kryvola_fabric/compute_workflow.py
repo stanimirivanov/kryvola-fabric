@@ -82,7 +82,7 @@ async def _prepare(identity: dict) -> dict:
     )
 
 
-async def _complete(prepared: dict, *, ray: bool = False) -> dict[str, str]:
+async def _complete(prepared: dict, *, ray: bool = False, release: bool = False) -> dict[str, str]:
     candidate = await workflow.execute_activity(
         "compute_ray_dispatch" if ray else "compute_dispatch",
         prepared,
@@ -93,9 +93,22 @@ async def _complete(prepared: dict, *, ray: bool = False) -> dict[str, str]:
     )
     if candidate["state"] != "CANDIDATE":
         return {"outcome": candidate["state"]}
-    return await workflow.execute_activity(
+    selected = await workflow.execute_activity(
         "compute_select",
         candidate["selection"],
+        result_type=dict,
+        start_to_close_timeout=timedelta(seconds=10),
+        retry_policy=RetryPolicy(maximum_attempts=3),
+    )
+    if not release:
+        return selected
+    operation = prepared["operation"]
+    return await workflow.execute_activity(
+        "compute_release",
+        {
+            **{key: operation[key] for key in ("tenant_scope", "operation_id", "workflow_epoch")},
+            **{key: selected[key] for key in ("execution_id", "output_manifest_digest")},
+        },
         result_type=dict,
         start_to_close_timeout=timedelta(seconds=10),
         retry_policy=RetryPolicy(maximum_attempts=3),
@@ -155,7 +168,11 @@ class ComputeWorkflow:
 
         identity = {key: state[key] for key in ("tenant_scope", "operation_id")}
         ray = state.get("ray") is True
-        checkpoint = {**identity, "ray": True} if ray else identity
+        release = state.get("release") is True
+        checkpoint = {
+            **identity,
+            **{key: True for key in ("ray", "release") if state.get(key) is True},
+        }
         epoch = state.get("attempt_epoch", "1")
         binding = state.get("binding")
         prepared = state.get("prepared")
@@ -182,7 +199,7 @@ class ComputeWorkflow:
                             }
                         )
                     try:
-                        return await _complete(prepared, ray=ray)
+                        return await _complete(prepared, ray=ray, release=release)
                     except ActivityError as error:
                         if not _expired(error):
                             raise

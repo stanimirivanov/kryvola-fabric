@@ -6,7 +6,7 @@ import unittest
 from datetime import timedelta
 from pathlib import Path
 
-from temporalio import workflow
+from temporalio import activity, workflow
 from temporalio.exceptions import ApplicationError
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Replayer, Worker
@@ -290,3 +290,70 @@ class DurableWorkflowLiveTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual((await handle.result())["outcome"], "COMPUTE_SELECTED")
                 self.assertEqual(registry.registrations, 2)
                 self.assertEqual(bridge.targets, [bridge.targets[0]] * 2)
+
+    async def test_release_opt_in_schedules_exact_selected_output(self):
+        registry = FixtureRegistry()
+
+        async def dispatch(operation, attempt, execution):
+            return {
+                "schema_version": "1",
+                "attempt": attempt,
+                "execution_id": execution,
+                "output_manifest_digest": "a" * 64,
+            }
+
+        @activity.defn(name="compute_release")
+        async def release(request: dict) -> dict:
+            assert registry.selected is not None
+            self.assertEqual(
+                request,
+                {
+                    **{
+                        key: registry.operation[key]
+                        for key in ("tenant_scope", "operation_id", "workflow_epoch")
+                    },
+                    **{
+                        key: registry.selected[key]
+                        for key in ("execution_id", "output_manifest_digest")
+                    },
+                },
+            )
+            return {"outcome": "RELEASED", "disclosure_id": "e" * 64}
+
+        activities = ComputeActivities(registry, dispatch)
+        queue = "release-enabled"
+        async with (
+            await WorkflowEnvironment.start_local(
+                dev_server_existing_path=str(ROOT / "build/temporal/temporal"),
+                dev_server_startup_timeout=timedelta(seconds=30),
+                data_converter=DATA_CONVERTER,
+            ) as env,
+            asyncio.timeout(30),
+        ):
+            async with Worker(
+                env.client,
+                task_queue=queue,
+                workflows=[ComputeWorkflow],
+                activities=[activities.prepare, activities.dispatch, activities.select, release],
+            ):
+                notice = {
+                    "version": 2,
+                    "id": "1",
+                    "kind": "operation_created",
+                    **{key: registry.operation[key] for key in ("tenant_scope", "operation_id")},
+                }
+                handle = await start_from_notification(
+                    env.client,
+                    queue,
+                    json.dumps(notice).encode(),
+                    release=True,
+                )
+                assert handle is not None
+                self.assertEqual(
+                    await handle.result(), {"outcome": "RELEASED", "disclosure_id": "e" * 64}
+                )
+                self.assertEqual(registry.calls, 2)
+                history = await handle.fetch_history()
+            await Replayer(
+                workflows=[ComputeWorkflow], data_converter=DATA_CONVERTER
+            ).replay_workflow(history)

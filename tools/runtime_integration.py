@@ -494,6 +494,7 @@ def run(folder: Path) -> None:
         check_workload_auth()
         check_postgres(invoke)
         check_registry(folder, "durable_registry")
+        check_registry(folder, "release::exact_release_transaction")
         require(invoke("restart", "postgres", timeout=90), "PostgreSQL restart")
         require(
             invoke("up", "-d", "--wait", "--wait-timeout=90", timeout=120),

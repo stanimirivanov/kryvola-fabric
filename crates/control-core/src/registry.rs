@@ -5,6 +5,8 @@ mod events;
 pub use barriers::{Cancellation, RecoveryFence};
 pub use events::{Broker, Delivery, DeliveryRef};
 mod receipt;
+mod release;
+pub use release::{ReleasePolicy, ReleaseRequest, disclosure_id};
 mod selection;
 pub use selection::{ExecutionTarget, SelectedResult};
 use serde_json::Value;

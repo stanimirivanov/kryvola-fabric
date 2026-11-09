@@ -684,3 +684,11 @@ The [Ray Jobs adapter](ray-dispatch.md) attaches to the deterministic job
 identity after an ambiguous submission. The live gate exercises the pinned
 scheduler, separate execution namespaces and the Engine RPC boundary with
 controlled Engine responses.
+
+## M1-PR24 exact release decisions
+
+The [coordinator release transaction](exact-release.md) binds the selected
+artifact, canonical signed receipt, current owner approval and explicit
+workflow decision to one durable disclosure identity. The live gates
+exercise workflow replay and concurrent PostgreSQL decisions, including
+release after the dispatch lease expires.

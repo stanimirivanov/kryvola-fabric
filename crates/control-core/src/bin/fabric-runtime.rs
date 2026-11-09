@@ -31,6 +31,8 @@ use tokio_rustls::rustls;
 
 #[path = "fabric_runtime/messaging.rs"]
 mod messaging;
+#[path = "fabric_runtime/release.rs"]
+mod release;
 
 const BODY_TIMEOUT: Duration = Duration::from_secs(2);
 
@@ -368,6 +370,13 @@ async fn serve_mtls(
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn Error>> {
     let args: Vec<_> = std::env::args().skip(1).collect();
+    if let [mode, db, value] = args.as_slice() {
+        match mode.as_str() {
+            "--commit-release" => return release::commit(db, value).await,
+            "--revoke-release-approval" => return release::revoke(db, value).await,
+            _ => {}
+        }
+    }
     if let [mode, remaining @ ..] = args.as_slice()
         && mode == "--reclaim"
     {
