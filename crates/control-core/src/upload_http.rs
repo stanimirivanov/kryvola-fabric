@@ -170,10 +170,16 @@ impl UploadApi {
 
     pub fn matches_read(method: &Method, path: &str) -> bool {
         *method == Method::POST
-            && (path == "/v1/compute-inputs/manifest"
-                || path
-                    .strip_prefix("/v1/compute-inputs/parts/")
-                    .is_some_and(|index| !index.is_empty() && !index.contains('/')))
+            && ["/v1/compute-inputs", "/v1/released-outputs"]
+                .iter()
+                .any(|prefix| {
+                    path.strip_prefix(prefix).is_some_and(|target| {
+                        target == "/manifest"
+                            || target
+                                .strip_prefix("/parts/")
+                                .is_some_and(|index| !index.is_empty() && !index.contains('/'))
+                    })
+                })
     }
 
     pub async fn handle_read(
@@ -227,11 +233,19 @@ impl UploadApi {
             return Err(UploadError::Integrity);
         }
         let path = parts.uri.path();
-        let index = if path == "/v1/compute-inputs/manifest" {
+        let released = path.starts_with("/v1/released-outputs/");
+        let target = path
+            .strip_prefix(if released {
+                "/v1/released-outputs"
+            } else {
+                "/v1/compute-inputs"
+            })
+            .ok_or(UploadError::NotFound)?;
+        let index = if target == "/manifest" {
             None
         } else {
-            let raw = path
-                .strip_prefix("/v1/compute-inputs/parts/")
+            let raw = target
+                .strip_prefix("/parts/")
                 .ok_or(UploadError::NotFound)?;
             Some(
                 raw.parse::<u16>()
@@ -241,6 +255,23 @@ impl UploadApi {
             )
         };
         let bytes = collect(body).await?;
+        if released {
+            let scope = schemas
+                .decode("ReadReleasedOutputRequest", &bytes)
+                .map_err(|_| UploadError::Integrity)?;
+            let grant = auth.redeem_consumer(peer, token, &scope, index)?;
+            return self
+                .store
+                .read_released_output(&scope, index, &grant, || {
+                    if Instant::now() >= deadline
+                        || !now_unix_ms().is_some_and(|now| now < identity_expiry)
+                    {
+                        return Err(UploadError::Denied);
+                    }
+                    auth.check_consumer(&grant)
+                })
+                .await;
+        }
         let mut value = schemas
             .decode("ReadComputeInputRequest", &bytes)
             .map_err(|_| UploadError::Integrity)?;

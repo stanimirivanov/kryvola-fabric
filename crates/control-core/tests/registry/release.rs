@@ -38,9 +38,28 @@ fn sign(kind: &str, body: &Value, signer: &str, seed: u8) -> (Vec<u8>, Vec<u8>, 
     (body, canonical(header), digest, trust)
 }
 
+fn consumer_manifest() -> Value {
+    let corpus: Value = serde_json::from_str(include_str!(
+        "../../../../contracts/spec/fixtures/canonical-modular-v2.json"
+    ))
+    .unwrap();
+    let mut manifest = corpus["objects"][0]["value"].clone();
+    manifest["tenant_scope"] = json!("release-tenant");
+    manifest
+}
+
 async fn fixture(pool: &PgPool, epoch: u64, output_tag: u64) -> (Value, Value, String) {
     let id = format!("release-op-{epoch}");
-    let output = format!("{output_tag:064x}");
+    let manifest = (output_tag == 0).then(consumer_manifest);
+    let manifest_bytes = manifest
+        .as_ref()
+        .map(|value| canonical(value.clone()))
+        .unwrap_or_default();
+    let output = if manifest.is_some() {
+        hash(b"kryvola/manifest/v2\0", &manifest_bytes)
+    } else {
+        format!("{output_tag:064x}")
+    };
     let owner = "release-tenant";
     let original: Value = serde_json::from_str(include_str!(
         "../../../../contracts/spec/fixtures/canonical-approval-receipt-v3.json"
@@ -57,6 +76,9 @@ async fn fixture(pool: &PgPool, epoch: u64, output_tag: u64) -> (Value, Value, S
     let now = kryvola_fabric_core::authorization::now_unix_ms().unwrap();
     let mut identity = disclosure["identity"].clone();
     identity["tenant_scope"] = json!(owner);
+    if output_tag == 0 {
+        identity["logical_job_id"] = json!(format!("consumer-{epoch}"));
+    }
     let mut approval = original["objects"][0]["value"].clone();
     let mut receipt = original["objects"][1]["value"].clone();
     for field in ["tenant_scope", "logical_job_id"] {
@@ -70,6 +92,9 @@ async fn fixture(pool: &PgPool, epoch: u64, output_tag: u64) -> (Value, Value, S
         value["operation_id"] = json!(id);
         value["workflow_epoch"] = json!(epoch.to_string());
         value["consent_digest"] = json!(hash(b"kryvola/blob/v1\0", &canonical(consent.clone())));
+    }
+    if let Some(manifest) = manifest {
+        approval["key_context_digest"] = manifest["key_context_digest"].clone();
     }
     approval["purpose"] = json!("RELEASE");
     approval["subject_kind"] = json!("plan");
@@ -139,10 +164,11 @@ async fn fixture(pool: &PgPool, epoch: u64, output_tag: u64) -> (Value, Value, S
     .unwrap();
     sqlx::query(
         "INSERT INTO fabric_finalized_artifacts (upload_id,manifest_digest,canonical_manifest)
-        VALUES($1,$2,''::bytea)",
+        VALUES($1,$2,$3)",
     )
     .bind(&id)
     .bind(&output)
+    .bind(manifest_bytes)
     .execute(pool)
     .await
     .unwrap();
@@ -249,5 +275,201 @@ async fn exact_release_transaction() {
     assert_eq!(
         commit(next, next_policy).await,
         Err(RegistryError::Cancelled)
+    );
+}
+
+#[tokio::test]
+#[ignore = "requires isolated PostgreSQL and S3"]
+async fn released_output_reads() {
+    use axum::{
+        body::{Body, to_bytes},
+        extract::Request,
+        http::StatusCode,
+    };
+    use kryvola_fabric_core::{
+        authorization::{Authorizer, now_unix_ms, sha256_hex},
+        registry::disclosure_id,
+        runtime_contract::RuntimeValidator,
+        upload_http::UploadApi,
+    };
+    use object_store::{ObjectStoreExt, path::Path};
+    use std::{
+        fs,
+        path::PathBuf,
+        time::{Duration, Instant},
+    };
+
+    let pool = PgPoolOptions::new()
+        .connect_with(super::fixture_options())
+        .await
+        .unwrap();
+    let registry = Registry::new(pool.clone());
+    registry.migrate().await.unwrap();
+    let (request, policy, approval) = fixture(&pool, 11, 0).await;
+    let identity: Value = sqlx::query_scalar(
+        "SELECT intent->'disclosure_identity' FROM fabric_operations WHERE operation_id='release-op-11'",
+    ).fetch_one(&pool).await.unwrap();
+    let scope = json!({"schema_version":"1","tenant_scope":identity["tenant_scope"],
+        "recipient":identity["recipient"],"disclosure_id":disclosure_id(&identity).unwrap(),
+        "output_manifest_digest":request["output_manifest_digest"]});
+    let dir = PathBuf::from(std::env::var_os("FABRIC_FIXTURE_PG_SOCKET").unwrap());
+    let config = dir.with_file_name("consumer-storage.json");
+    fs::write(&config, json!({
+        "endpoint":std::env::var("FABRIC_FIXTURE_S3_ENDPOINT").unwrap(),
+        "access_key_id":std::env::var("AWS_ACCESS_KEY_ID").unwrap(),
+        "secret_access_key":std::env::var("AWS_SECRET_ACCESS_KEY").unwrap(),
+        "bucket":"fabric-runtime","region":"us-east-1","tenant_quota_bytes":1024,"allow_http":true
+    }).to_string()).unwrap();
+    let api = UploadApi::connect(pool.clone(), config.to_str().unwrap()).unwrap();
+    let policy_path = dir.with_file_name("consumer-policy.json");
+    let auth = Authorizer::new(policy_path.clone()).unwrap();
+    let peer = "spiffe://fixture.test/owner".parse().unwrap();
+    let worker = "spiffe://fixture.test/worker".parse().unwrap();
+    let now = now_unix_ms().unwrap();
+    let grant = |number: u8, index: Option<u16>, target: &Value| {
+        json!({
+            "spiffe_id":"spiffe://fixture.test/owner", "token_sha256":sha256_hex(format!("{number:064x}").as_bytes()),
+            "scope":target, "part_index":index,"expires_unix_ms":now+60_000,
+            "policy_digest":policy["policy_digest"],"policy_epoch":policy["policy_epoch"],
+            "coordinator":policy["coordinator"]
+        })
+    };
+    let mut wrong = scope.clone();
+    wrong["recipient"] = json!("intruder");
+    let mut guessed = scope.clone();
+    guessed["output_manifest_digest"] = json!("b".repeat(64));
+    let mut stale = grant(12, None, &scope);
+    stale["policy_epoch"] = json!("9");
+    let compute = |number: u8, purpose: &str| {
+        json!({
+            "spiffe_id":"spiffe://fixture.test/owner","token_sha256":sha256_hex(format!("{number:064x}").as_bytes()),
+            "expires_unix_ms":now+60_000,"scope":{"schema_version":"1","attempt":{"schema_version":"1",
+            "tenant_scope":"release-tenant","operation_id":"release-op-11","workflow_epoch":"11",
+            "attempt_epoch":"1","fence":"1"},"manifest_digest":scope["output_manifest_digest"],"purpose":purpose}
+        })
+    };
+    fs::write(&policy_path, json!({
+        "boot_id":auth.boot_id(),"grants":[compute(8,"COMPUTE_READ"),compute(9,"EVIDENCE_READ")],
+        "consumer_grants":[grant(1,None,&scope),grant(2,None,&scope),grant(3,Some(0),&scope),
+            grant(4,None,&wrong),grant(5,None,&guessed),grant(6,None,&scope),grant(7,None,&scope),
+            grant(10,Some(1),&scope),grant(11,None,&scope),stale]
+    }).to_string()).unwrap();
+    let schemas = RuntimeValidator::new().unwrap();
+    let read = |number: u8, scope: &Value, path: &str, workload| {
+        api.handle_read(
+            Request::post(format!("/v1/released-outputs/{path}"))
+                .header("Authorization", format!("Bearer {number:064x}"))
+                .body(Body::from(scope.to_string()))
+                .unwrap(),
+            (
+                workload,
+                &auth,
+                now + 60_000,
+                Instant::now() + Duration::from_secs(10),
+            ),
+            &schemas,
+        )
+    };
+    assert_eq!(
+        read(1, &scope, "manifest", &peer).await.status(),
+        StatusCode::FORBIDDEN
+    );
+    let policy_value: ReleasePolicy = serde_json::from_value(policy.clone()).unwrap();
+    registry
+        .commit_release(&serde_json::from_value(request).unwrap(), &policy_value)
+        .await
+        .unwrap();
+    for (token, body, workload) in [
+        (4, &wrong, &peer),
+        (5, &guessed, &peer),
+        (8, &scope, &peer),
+        (9, &scope, &peer),
+        (6, &scope, &worker),
+        (12, &scope, &peer),
+    ] {
+        assert_eq!(
+            read(token, body, "manifest", workload).await.status(),
+            StatusCode::FORBIDDEN
+        );
+    }
+    assert_eq!(
+        read(3, &scope, "manifest", &peer).await.status(),
+        StatusCode::FORBIDDEN
+    );
+    let response = read(2, &scope, "manifest", &peer).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()["cache-control"], "no-store");
+    assert_eq!(
+        to_bytes(response.into_body(), 65536)
+            .await
+            .unwrap()
+            .as_ref(),
+        canonical(consumer_manifest())
+    );
+    assert_eq!(
+        read(2, &scope, "manifest", &peer).await.status(),
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        read(10, &scope, "parts/1", &peer).await.status(),
+        StatusCode::NOT_FOUND
+    );
+    super::fixture_objects()
+        .put(
+            &Path::from("immutable/release-op-11/0"),
+            axum::body::Bytes::from_static(&[0, 1, 2, 255]).into(),
+        )
+        .await
+        .unwrap();
+    let response = read(3, &scope, "parts/0", &peer).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        to_bytes(response.into_body(), 4).await.unwrap().as_ref(),
+        &[0, 1, 2, 255]
+    );
+    registry.revoke_release_approval(&approval).await.unwrap();
+    assert_eq!(
+        read(7, &scope, "manifest", &peer).await.status(),
+        StatusCode::FORBIDDEN
+    );
+    let (cancelled, cancelled_policy, _) = fixture(&pool, 12, 0).await;
+    let cancelled_policy = serde_json::from_value(cancelled_policy).unwrap();
+    let decision = registry
+        .commit_release(
+            &serde_json::from_value(cancelled).unwrap(),
+            &cancelled_policy,
+        )
+        .await
+        .unwrap();
+    let mut cancelled_scope = scope.clone();
+    cancelled_scope["disclosure_id"] = decision["disclosure_id"].clone();
+    let mut local_policy: Value = serde_json::from_slice(&fs::read(&policy_path).unwrap()).unwrap();
+    local_policy["consumer_grants"]
+        .as_array_mut()
+        .unwrap()
+        .push(grant(13, None, &cancelled_scope));
+    fs::write(&policy_path, local_policy.to_string()).unwrap();
+    registry
+        .cancel_operation(
+            OperationKey {
+                tenant_scope: "release-tenant",
+                operation_id: "release-op-12",
+            },
+            "cancel-consumer-fixture",
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        read(13, &cancelled_scope, "manifest", &peer).await.status(),
+        StatusCode::FORBIDDEN
+    );
+    pool.close().await;
+    let outage = read(11, &scope, "manifest", &peer).await;
+    assert_eq!(outage.status(), StatusCode::SERVICE_UNAVAILABLE);
+    assert!(
+        to_bytes(outage.into_body(), 65536)
+            .await
+            .unwrap()
+            .starts_with(b"{")
     );
 }

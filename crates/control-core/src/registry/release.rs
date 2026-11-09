@@ -9,6 +9,10 @@ use serde_json::json;
 use super::*;
 use crate::receipt::{canonical, commitment, signature_preimage, verify_signature};
 
+static AUTHORIZATION: OnceLock<Option<jsonschema::Validator>> = OnceLock::new();
+const AUTHORIZATION_SCHEMA: &str =
+    include_str!("../../../../contracts/spec/canonical/v3/release-authorization.schema.json");
+
 const IDENTITY: [&str; 5] = [
     "tenant_scope",
     "logical_job_id",
@@ -29,9 +33,9 @@ const CONTEXT: [&str; 10] = [
     "policy_digest",
 ];
 
-#[derive(Deserialize)]
+#[derive(Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
-struct Trust {
+pub(crate) struct Trust {
     signer: String,
     key_id: String,
     key_epoch: String,
@@ -120,14 +124,13 @@ async fn lock_approval(tx: &mut Transaction<'_, Postgres>, digest: &str) -> Resu
 }
 
 fn signed_decision(value: &Value, policy: &ReleasePolicy) -> Result<(Vec<u8>, Vec<u8>)> {
-    static AUTHORIZATION: OnceLock<Option<jsonschema::Validator>> = OnceLock::new();
     let kind = "release-authorization";
     let payload = compact(value.clone())?;
     canonical(
         &json!(URL_SAFE_NO_PAD.encode(&payload)),
         32768,
         &AUTHORIZATION,
-        include_str!("../../../../contracts/spec/canonical/v3/release-authorization.schema.json"),
+        AUTHORIZATION_SCHEMA,
     )?;
     let signer = &policy.coordinator;
     let seed = hex::decode(&policy.coordinator_seed_hex).map_err(|_| RegistryError::Forbidden)?;
@@ -338,6 +341,88 @@ impl Registry {
         }
         tx.commit().await?;
         Ok(json!({"outcome":"RELEASED","disclosure_id":id}))
+    }
+}
+
+impl Registry {
+    pub(crate) async fn lock_release_read(
+        tx: &mut Transaction<'_, Postgres>,
+        scope: &Value,
+        grant: &crate::authorization::ConsumerGrant,
+    ) -> Result<(String, String, u64, u64)> {
+        let id = string(scope, "disclosure_id")?;
+        let (upload, digest, payload, envelope): (String, String, Vec<u8>, Vec<u8>) =
+            sqlx::query_as(
+                "SELECT output_upload_id,output_manifest_digest,canonical_authorization,
+                canonical_signature FROM fabric_disclosure_decisions WHERE disclosure_id=$1",
+            )
+            .bind(&id)
+            .fetch_optional(&mut **tx)
+            .await?
+            .ok_or(RegistryError::Forbidden)?;
+        let (_, decision) = canonical(
+            &json!(URL_SAFE_NO_PAD.encode(&payload)),
+            32768,
+            &AUTHORIZATION,
+            AUTHORIZATION_SCHEMA,
+        )?;
+        verify_signature(
+            &json!(URL_SAFE_NO_PAD.encode(envelope)),
+            &payload,
+            "release-authorization",
+            grant.coordinator.fields(),
+        )?;
+        if ["tenant_scope", "recipient", "output_manifest_digest"]
+            .iter()
+            .any(|field| decision[*field] != scope[*field])
+            || decision["output_manifest_digest"] != digest
+            || decision["policy_digest"] != grant.policy_digest
+            || decision["policy_epoch"] != grant.policy_epoch
+        {
+            return Err(RegistryError::Forbidden);
+        }
+        let tenant = string(scope, "tenant_scope")?;
+        let operation_id = string(&decision, "operation_id")?;
+        let key = OperationKey {
+            tenant_scope: &tenant,
+            operation_id: &operation_id,
+        };
+        let operation: Value = sqlx::query_scalar(
+            "SELECT intent FROM fabric_operations WHERE tenant_scope=$1 AND operation_id=$2 FOR SHARE",
+        ).bind(&tenant).bind(&operation_id).fetch_optional(&mut **tx).await?
+            .ok_or(RegistryError::Forbidden)?;
+        super::barriers::require_open(tx, key).await?;
+        let identity = &operation["disclosure_identity"];
+        if disclosure_id(identity)? != id
+            || IDENTITY
+                .iter()
+                .any(|field| identity[*field] != decision[*field])
+            || operation["workflow_epoch"] != decision["workflow_epoch"]
+            || operation["policy_digest"] != decision["policy_digest"]
+            || operation["plan_ref"]["plan_digest"] != decision["plan_digest"]
+            || operation["key_context_ref"]["key_context_digest"] != decision["key_context_digest"]
+        {
+            return Err(RegistryError::Forbidden);
+        }
+        let approval = string(&decision, "approval_digest")?;
+        lock_approval(tx, &approval).await?;
+        let revoked: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM fabric_revoked_release_approvals WHERE approval_digest=$1)",
+        ).bind(&approval).fetch_one(&mut **tx).await?;
+        if revoked {
+            return Err(RegistryError::Forbidden);
+        }
+        let time = |name| {
+            string(&decision, name)?
+                .parse::<u64>()
+                .map_err(|_| RegistryError::InvalidIntent)
+        };
+        Ok((
+            upload,
+            string(&decision, "key_context_digest")?,
+            time("valid_from_unix_ms")?,
+            time("expires_unix_ms")?,
+        ))
     }
 }
 

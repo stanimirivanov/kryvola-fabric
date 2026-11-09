@@ -72,3 +72,30 @@ fn loopback_shell_bounds_requests_and_denies_runtime_routes() {
     assert!(stalled.starts_with("HTTP/1.1 408 "));
     assert_error(&stalled, "INVALID_REQUEST");
 }
+
+#[test]
+fn released_output_routes_use_closed_published_scope() {
+    use axum::http::Method;
+    use kryvola_fabric_core::{runtime_contract::RuntimeValidator, upload_http::UploadApi};
+
+    let schemas = RuntimeValidator::new().unwrap();
+    let body = serde_json::json!({
+        "schema_version":"1","tenant_scope":"tenant","recipient":"owner",
+        "disclosure_id":"a".repeat(64),"output_manifest_digest":"b".repeat(64)
+    });
+    let bytes = serde_json::to_vec(&body).unwrap();
+    assert!(schemas.decode("ReadReleasedOutputRequest", &bytes).is_ok());
+    assert!(schemas.decode("ReadComputeInputRequest", &bytes).is_err());
+    assert!(UploadApi::matches_read(
+        &Method::POST,
+        "/v1/released-outputs/manifest"
+    ));
+    assert!(UploadApi::matches_read(
+        &Method::POST,
+        "/v1/released-outputs/parts/0"
+    ));
+    assert!(!UploadApi::matches_read(
+        &Method::GET,
+        "/v1/released-outputs/manifest"
+    ));
+}

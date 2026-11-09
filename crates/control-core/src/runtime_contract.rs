@@ -35,6 +35,7 @@ impl RuntimeValidator {
             "IssueOutputGrantResponse",
             "RecoveryFenceResponse",
             "ReadComputeInputRequest",
+            "ReadReleasedOutputRequest",
             "PersistExecutionReceiptRequest",
             "PersistExecutionReceiptResponse",
             "RegisterExecutionRequest",

@@ -1,9 +1,9 @@
 {
   "repository": "https://github.com/stanimirivanov/kryvola-spec",
-  "revision": "52a5098bd8d8f740e8c20dba21b23248deb82d39",
+  "revision": "1285ce135587f92c422301345b26b24fa5795f96",
   "contract_version": "0.1.0-preview.10",
   "artifact_root": "contracts/spec",
-  "manifest_sha256": "90b5977cbed74424861517af892ae513762ccd8c83a75341f7701fb77aaad3fa",
+  "manifest_sha256": "c9c3ff0dda32d684bcb304377390cb98db05726f038b636f6f3c1f8a27808e14",
   "native_artifact_root": "contracts/native",
-  "native_manifest_sha256": "2784fc4c289aeaa1c792cdbe41499e81c8b36644b364e0e1b0d70a590effc725"
+  "native_manifest_sha256": "436a7b51a2784b6bc988c61d0f7e60224bc1207ffce40ce9ea54521b21ae4924"
 }
