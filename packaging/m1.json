@@ -1,0 +1,19 @@
+{
+  "schema_version": "fabric-m1-inventory-v1",
+  "platform": "linux-x86_64",
+  "rust": "1.98.1",
+  "owner_binding": "kryvola-owner==0.1.0.dev2",
+  "ray_image": "rayproject/ray@sha256:e93e502244bf8c0ecf8c633099f7819d7c973d76eded8e32617e1fb66725da02",
+  "python": {
+    "workflow": {
+      "python": "3.14.7",
+      "modules": ["__init__.py", "control.py", "compute_workflow.py", "compute_activities.py", "compute_recovery.py", "compute_release.py", "ray_dispatch.py", "ray_worker.py"],
+      "dependencies": ["protobuf==7.35.1", "jsonschema==4.26.0", "temporalio==1.35.0"]
+    },
+    "ray": {
+      "python": "3.12.14",
+      "modules": ["__init__.py", "control.py", "ray_worker.py"],
+      "dependencies": ["protobuf==7.35.1", "jsonschema==4.26.0", "grpcio==1.75.0"]
+    }
+  }
+}

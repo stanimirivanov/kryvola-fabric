@@ -712,3 +712,12 @@ the two-byte result only over the authenticated local peer connection.
 The [owner submission routes](approved-submission.md) register immutable
 metadata, accept verified input uploads before dispatch, and admit exact
 approved references with input pins and a single operation notification.
+
+## M1-PR29 runtime delivery packages
+
+[M1 publication](runtime-publication.md) adds separate native runtime/owner
+archives and isolated workflow/Ray role wheels, locked environments and explicit
+inventory/provenance. Qualification executes installed binaries, Temporal
+retry/replay and the pinned Ray image without source mounts. M0 identities
+remain unchanged. Native owner crypto qualification, production provisioning
+and PR30 composition remain separate gates.
