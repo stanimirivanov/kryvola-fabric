@@ -92,3 +92,21 @@ class RuntimeReleaseTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 runtime.validate(folder, manifest["source"])
             self.assertEqual(read(folder / "manifest.json"), manifest)
+
+
+class NativeLibraryTests(unittest.TestCase):
+    def test_system_library_symlinks_bind_the_resolved_file(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as directory:
+            real = Path(directory) / "libexample.so.1.2"
+            real.write_bytes(b"public library fixture")
+            link = Path(directory) / "libexample.so.1"
+            link.symlink_to(real)
+            with patch.object(
+                runtime.release,
+                "run",
+                return_value=SimpleNamespace(stdout=f"libexample.so.1 => {link} (0x0000)\n"),
+            ):
+                self.assertEqual(runtime.libraries(Path("fixture")), {str(real): runtime.sha(real)})

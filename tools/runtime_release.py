@@ -28,6 +28,12 @@ def inventory():
     return read(ROOT / "packaging/m1.json")
 
 
+def libraries(binary):
+    linked = release.run("ldd", binary, capture_output=True, text=True).stdout
+    paths = {Path(path).resolve(strict=True) for path in re.findall(r"(/[^\s()]+)", linked)}
+    return {str(path): sha(path) for path in sorted(paths)}
+
+
 def assets(role):
     if role == "owner":
         return {"bin/kryvola-owner-agent", "LICENSE"}
@@ -214,12 +220,7 @@ def build():
     )
     native = {"platform": inventory()["platform"], "rust": inventory()["rust"], "libraries": {}}
     for role, binary in (("runtime", "fabric-runtime"), ("owner", "kryvola-owner-agent")):
-        linked = release.run(
-            "ldd", ROOT / "target/release" / binary, capture_output=True, text=True
-        ).stdout
-        native["libraries"][role] = {
-            path: sha(Path(path)) for path in re.findall(r"(/[^\s()]+)", linked)
-        }
+        native["libraries"][role] = libraries(ROOT / "target/release" / binary)
         contents = {}
         for name in assets(role):
             path = (
