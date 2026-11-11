@@ -6,12 +6,12 @@ use ring::signature::{Ed25519KeyPair, KeyPair};
 use serde_json::{Value, json};
 use sqlx::{PgPool, postgres::PgPoolOptions};
 
-fn canonical(mut value: Value) -> Vec<u8> {
+pub(super) fn canonical(mut value: Value) -> Vec<u8> {
     value.sort_all_objects();
     serde_json::to_vec(&value).unwrap()
 }
 
-fn hash(domain: &[u8], bytes: &[u8]) -> String {
+pub(super) fn hash(domain: &[u8], bytes: &[u8]) -> String {
     blake3::Hasher::new()
         .update(domain)
         .update(bytes)
@@ -20,7 +20,12 @@ fn hash(domain: &[u8], bytes: &[u8]) -> String {
         .to_string()
 }
 
-fn sign(kind: &str, body: &Value, signer: &str, seed: u8) -> (Vec<u8>, Vec<u8>, String, Value) {
+pub(super) fn sign(
+    kind: &str,
+    body: &Value,
+    signer: &str,
+    seed: u8,
+) -> (Vec<u8>, Vec<u8>, String, Value) {
     let body = canonical(body.clone());
     let digest = hash(format!("kryvola/{kind}/v3\0").as_bytes(), &body);
     let key = Ed25519KeyPair::from_seed_unchecked(&[seed; 32]).unwrap();

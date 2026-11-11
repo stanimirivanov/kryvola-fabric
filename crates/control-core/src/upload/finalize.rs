@@ -166,7 +166,22 @@ impl UploadStore {
         let size = number(&manifest["serialized_bytes"])?;
         let mut tx = self.begin(&mut permit).await?;
         let upload = lock_upload(&mut tx, &permit, id, self.fenced, UploadAccess::Write).await?;
-        if self.fenced {
+        if permit.scope["purpose"] == "INPUT_UPLOAD" {
+            let context =
+                crate::registry::submission::key_context(&mut tx, &permit.scope["key_context_ref"])
+                    .await
+                    .map_err(|_| UploadError::Unavailable)?;
+            if manifest["key_context_digest"]
+                != permit.scope["key_context_ref"]["key_context_digest"]
+                || manifest["artifact_kind"] != permit.scope["artifact_kind"]
+                || manifest["parameters"] != context["parameters"]
+                || manifest["native_codec_version"] != context["native_codec_version"]
+                || (manifest["artifact_kind"] == "EVALUATION_KEY"
+                    && manifest["full_blob_digest"] != context["evaluation_key_blob_digest"])
+            {
+                return Err(UploadError::Denied);
+            }
+        } else if self.fenced {
             let context: Option<String> = sqlx::query_scalar(
                 "SELECT intent->'key_context_ref'->>'key_context_digest' FROM fabric_operations WHERE tenant_scope=$1 AND operation_id=$2"
             ).bind(&permit.tenant).bind(permit.scope["attempt"]["operation_id"].as_str())

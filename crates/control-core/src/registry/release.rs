@@ -43,7 +43,7 @@ pub(crate) struct Trust {
 }
 
 impl Trust {
-    fn fields(&self) -> (&str, &str, &str, &str) {
+    pub(crate) fn fields(&self) -> (&str, &str, &str, &str) {
         (
             &self.signer,
             &self.key_id,
@@ -115,7 +115,7 @@ pub fn disclosure_id(identity: &Value) -> Result<String> {
     ))
 }
 
-async fn lock_approval(tx: &mut Transaction<'_, Postgres>, digest: &str) -> Result<()> {
+pub(super) async fn lock_approval(tx: &mut Transaction<'_, Postgres>, digest: &str) -> Result<()> {
     sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
         .bind(digest)
         .execute(&mut **tx)

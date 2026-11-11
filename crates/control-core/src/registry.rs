@@ -9,6 +9,7 @@ mod release;
 pub(crate) use release::Trust;
 pub use release::{ReleasePolicy, ReleaseRequest, disclosure_id};
 mod selection;
+pub(crate) mod submission;
 pub use selection::{ExecutionTarget, SelectedResult};
 use serde_json::Value;
 use sqlx::{PgPool, Postgres, Row, Transaction, types::Json};
@@ -159,6 +160,15 @@ impl Registry {
 
     pub async fn create_operation(&self, intent: &OperationIntent) -> Result<OperationRecord> {
         let mut tx = self.pool.begin().await?;
+        let (saved, _) = Self::record_operation(&mut tx, intent).await?;
+        tx.commit().await?;
+        Ok(saved)
+    }
+
+    async fn record_operation(
+        tx: &mut Transaction<'_, Postgres>,
+        intent: &OperationIntent,
+    ) -> Result<(OperationRecord, bool)> {
         let key = intent.key();
         let inserted = sqlx::query(
             "INSERT INTO fabric_operations (tenant_scope, operation_id, idempotency_key, intent, inputs) \
@@ -169,14 +179,14 @@ impl Registry {
         .bind(&intent.idempotency)
         .bind(Json(&intent.record.operation))
         .bind(Json(&intent.record.input_manifest_digests))
-        .execute(&mut *tx)
+        .execute(&mut **tx)
         .await?;
         let row = sqlx::query(
             "SELECT intent, inputs FROM fabric_operations WHERE tenant_scope = $1 AND idempotency_key = $2",
         )
         .bind(key.tenant_scope)
         .bind(&intent.idempotency)
-        .fetch_optional(&mut *tx)
+        .fetch_optional(&mut **tx)
         .await?
         .ok_or(RegistryError::IdempotencyConflict)?;
         let saved = read_operation(row)?;
@@ -184,10 +194,9 @@ impl Registry {
             return Err(RegistryError::IdempotencyConflict);
         }
         if inserted.rows_affected() == 1 {
-            events::enqueue(&mut tx, key, "operation_created").await?;
+            events::enqueue(tx, key, "operation_created").await?;
         }
-        tx.commit().await?;
-        Ok(saved)
+        Ok((saved, inserted.rows_affected() == 1))
     }
 
     pub async fn lookup_operation(&self, key: OperationKey<'_>) -> Result<Option<OperationRecord>> {

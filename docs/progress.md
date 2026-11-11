@@ -706,3 +706,9 @@ The [owner opening command](local-result-opening.md) verifies the signed
 release and current owner approval, checks live released-output authority,
 and opens the exact ciphertext through the pinned owner wheel. It returns
 the two-byte result only over the authenticated local peer connection.
+
+## M1-PR27 Fabric approved submission prerequisite
+
+The [owner submission routes](approved-submission.md) register immutable
+metadata, accept verified input uploads before dispatch, and admit exact
+approved references with input pins and a single operation notification.

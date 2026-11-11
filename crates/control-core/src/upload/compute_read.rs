@@ -61,11 +61,16 @@ impl UploadStore {
                                 THEN f.canonical_manifest END
              FROM fabric_finalized_artifacts f JOIN fabric_uploads u ON u.id=f.upload_id
              WHERE u.tenant_scope=$1 AND f.manifest_digest=$2 AND NOT u.reclaiming
+               AND (NOT EXISTS (SELECT 1 FROM fabric_approved_admissions a
+                    WHERE a.tenant_scope=$1 AND a.operation_id=$4)
+                    OR EXISTS (SELECT 1 FROM fabric_approved_admissions a
+                    WHERE a.tenant_scope=$1 AND a.operation_id=$4 AND u.id=ANY(a.upload_ids)))
              ORDER BY u.id LIMIT 1 FOR SHARE OF u",
         )
         .bind(tenant)
         .bind(digest)
         .bind(CONTROL_BYTES as i32)
+        .bind(operation)
         .fetch_optional(&mut *tx)
         .await?
         .ok_or(UploadError::NotFound)?;

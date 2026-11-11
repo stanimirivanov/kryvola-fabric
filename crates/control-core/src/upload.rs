@@ -13,6 +13,7 @@ use tokio::{
 
 mod compute_read;
 pub(crate) mod finalize;
+mod input;
 mod multipart;
 mod output;
 mod release_read;
@@ -93,7 +94,18 @@ impl UploadStore {
     async fn begin(&self, permit: &mut UploadPermit) -> Result<Transaction<'static, Postgres>> {
         check_permit(permit)?;
         let mut tx = self.pool.begin().await?;
-        if self.fenced {
+        if permit.scope["purpose"] == "INPUT_UPLOAD" {
+            let context =
+                crate::registry::submission::key_context(&mut tx, &permit.scope["key_context_ref"])
+                    .await
+                    .map_err(|error| match error {
+                        crate::registry::RegistryError::Unavailable => UploadError::Unavailable,
+                        _ => UploadError::Denied,
+                    })?;
+            if context["owner_identity"] != permit.scope["owner_identity"] {
+                return Err(UploadError::Denied);
+            }
+        } else if self.fenced {
             match crate::registry::Registry::artifact_deadline(&mut tx, &permit.scope).await {
                 Ok(deadline) => permit.bound_deadline(deadline),
                 Err(error) => {
@@ -113,14 +125,31 @@ impl UploadStore {
         bytes: &[u8],
     ) -> Result<()> {
         let value = finalize::manifest(bytes)?;
-        if value["tenant_scope"] != permit.tenant
-            || permit.scope["manifest_digest"]
-                != finalize::digest(b"kryvola/manifest/v2\0", &[bytes])
+        if value["tenant_scope"] != permit.tenant {
+            return Err(UploadError::Denied);
+        }
+        if permit.scope["purpose"] == "INPUT_UPLOAD"
+            && (value["key_context_digest"]
+                != permit.scope["key_context_ref"]["key_context_digest"]
+                || value["artifact_kind"] != permit.scope["artifact_kind"])
         {
             return Err(UploadError::Denied);
         }
+        if permit.scope["manifest_digest"] != finalize::digest(b"kryvola/manifest/v2\0", &[bytes]) {
+            return Err(if permit.scope["purpose"] == "INPUT_UPLOAD" {
+                UploadError::IdempotencyConflict
+            } else {
+                UploadError::Denied
+            });
+        }
         let mut tx = self.begin(&mut permit).await?;
         lock_upload(&mut tx, &permit, id, self.fenced, UploadAccess::Write).await?;
+        if permit.scope["purpose"] == "INPUT_UPLOAD"
+            && let Some(saved) = self.input_manifest_retry(&mut tx, id, bytes).await?
+        {
+            check_permit(&permit)?;
+            return saved;
+        }
         if is_finalized(&mut tx, id).await? {
             return Err(UploadError::Conflict);
         }
@@ -174,6 +203,13 @@ impl UploadStore {
         .bind(&permit.tenant)
         .fetch_one(&mut *tx)
         .await?;
+        if permit.scope["purpose"] == "INPUT_UPLOAD"
+            && let Some(id) = Self::input_reservation_retry(&mut tx, &permit, bytes).await?
+        {
+            check_permit(&permit)?;
+            tx.commit().await?;
+            return Ok(id);
+        }
         let used: i64 = sqlx::query_scalar(
             "SELECT COALESCE(sum(reserved_bytes), 0)::bigint FROM fabric_uploads WHERE tenant_scope = $1",
         ).bind(&permit.tenant).fetch_one(&mut *tx).await?;
@@ -205,6 +241,10 @@ impl UploadStore {
             output::record(&mut tx, &permit, execution, &id, bytes).await?;
             check_permit(&permit)?;
         }
+        if permit.scope["purpose"] == "INPUT_UPLOAD" {
+            Self::record_input_reservation(&mut tx, &permit, &id, bytes).await?;
+            check_permit(&permit)?;
+        }
         tx.commit().await?;
         Ok(id)
     }
@@ -222,6 +262,13 @@ impl UploadStore {
         }
         let mut tx = self.begin(&mut permit).await?;
         let upload = lock_upload(&mut tx, &permit, id, self.fenced, UploadAccess::Write).await?;
+        if permit.scope["purpose"] == "INPUT_UPLOAD"
+            && let Some(key) = Self::existing_input_part(&mut tx, id, index).await?
+        {
+            self.check_input_part(&key, declared, body).await?;
+            check_permit(&permit)?;
+            return Ok(());
+        }
         if is_finalized(&mut tx, id).await? {
             return Err(UploadError::Conflict);
         }
