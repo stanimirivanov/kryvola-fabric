@@ -10,7 +10,7 @@ jobs:
   qualify:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -27,6 +27,12 @@ jobs:
         with:
           name: experimental-wheel
           path: build/publication/*
+          if-no-files-found: error
+          retention-days: 7
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: m1-runtime
+          path: build/m1-publication/*
           if-no-files-found: error
           retention-days: 7
   publish:
@@ -48,11 +54,17 @@ jobs:
         with:
           name: experimental-wheel
           path: build/publication
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: m1-runtime
+          path: build/m1-publication
       - run: uv run --locked python tools/install_release.py
       - name: Sign and verify exact publisher identity and commit
         run: |
           build/release-tools/cosign sign-blob --yes --bundle build/publication/manifest.sigstore.json build/publication/manifest.json
           uv run --locked python tools/release.py verify --source "$GITHUB_SHA"
+          build/release-tools/cosign sign-blob --yes --bundle build/m1-publication/manifest.sigstore.json build/m1-publication/manifest.json
+          uv run --locked python tools/runtime_release.py verify --source "$GITHUB_SHA"
       - name: Create a fresh draft, upload once, then expose the prerelease
         env:
           GH_TOKEN: ${{ github.token }}
@@ -63,3 +75,9 @@ jobs:
           if gh release view "$tag"; then echo 'Release exists; refusing replacement'; exit 1; fi
           gh release create "$tag" --target "$GITHUB_SHA" --draft --prerelease --title "$tag" --notes 'Experimental Python conformance wheel only; no production execution or security qualification.' build/publication/*
           gh release edit "$tag" --draft=false
+          m1_tag="m1-${GITHUB_SHA}"
+          existing="$(git ls-remote --tags origin "refs/tags/$m1_tag")"
+          if [ -n "$existing" ]; then echo 'M1 tag exists; refusing replacement'; exit 1; fi
+          if gh release view "$m1_tag"; then echo 'M1 release exists; refusing replacement'; exit 1; fi
+          gh release create "$m1_tag" --target "$GITHUB_SHA" --draft --prerelease --title "$m1_tag" --notes 'M1 Fabric runtime packages; deployment, credentials and native owner qualification remain separate.' build/m1-publication/*
+          gh release edit "$m1_tag" --draft=false

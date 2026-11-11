@@ -87,6 +87,7 @@ def main() -> None:
         )
         run(sys.executable, "tools/runtime_integration.py", "ci")
         run(sys.executable, "tools/release.py", "qualify")
+        run(sys.executable, "tools/runtime_release.py", "qualify")
 
 
 if __name__ == "__main__":
