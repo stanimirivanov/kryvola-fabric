@@ -61,7 +61,7 @@ from kryvola_fabric.compute_workflow import ComputeWorkflow, DATA_CONVERTER
 from kryvola_fabric.compute_activities import ComputeActivities
 from kryvola_fabric.compute_release import CoordinatorRelease
 assert sys.version_info[:3] == (3,14,7)
-assert importlib.util.find_spec('kryvola_fabric.ray_worker') is None
+assert importlib.util.find_spec('grpc') is None
 assert importlib.util.find_spec('kryvola_fabric.conformance') is None
 assert importlib.util.find_spec('kryvola_owner') is None
 """,

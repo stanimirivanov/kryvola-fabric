@@ -7,7 +7,7 @@
   "python": {
     "workflow": {
       "python": "3.14.7",
-      "modules": ["__init__.py", "control.py", "compute_workflow.py", "compute_activities.py", "compute_recovery.py", "compute_release.py", "ray_dispatch.py"],
+      "modules": ["__init__.py", "control.py", "compute_workflow.py", "compute_activities.py", "compute_recovery.py", "compute_release.py", "ray_dispatch.py", "ray_worker.py"],
       "dependencies": ["protobuf==7.35.1", "jsonschema==4.26.0", "temporalio==1.35.0"]
     },
     "ray": {

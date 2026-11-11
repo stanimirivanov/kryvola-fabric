@@ -53,7 +53,7 @@ class RuntimeReleaseTests(unittest.TestCase):
     def test_role_boundaries_are_explicit_and_disjoint(self):
         roles = runtime.inventory()["python"]
         self.assertEqual(set(roles), {"workflow", "ray"})
-        self.assertNotIn("ray_worker.py", roles["workflow"]["modules"])
+        self.assertIn("ray_worker.py", roles["workflow"]["modules"])
         self.assertNotIn("compute_workflow.py", roles["ray"]["modules"])
         self.assertNotIn("temporalio", " ".join(roles["ray"]["dependencies"]))
         self.assertFalse(

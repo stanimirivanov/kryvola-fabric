@@ -10,11 +10,11 @@ separate. The supported target is Linux x86_64.
 |---|---|
 | `runtime-SHA.tar` | Release-mode `fabric-runtime`, all ordered SQL migrations, licence, Cargo lock, Rust toolchain and Spec pin. Includes registry/upload services, messaging, maintenance and release decisions. |
 | `owner-SHA.tar` | Release-mode `kryvola-owner-agent` and licence only. Provision Secret Service, coreutils timeout and the separately qualified `kryvola-owner==0.1.0.dev2` interpreter. No owner key or compute Python environment is bundled. |
-| `kryvola_fabric_workflow-VERSION-py3-none-any.whl` | Python 3.14.7 Temporal workflows, recovery/release activities and host Ray dispatcher. No Ray job worker, owner binding or conformance implementation. |
+| `kryvola_fabric_workflow-VERSION-py3-none-any.whl` | Python 3.14.7 Temporal workflows, recovery/release activities and host Ray dispatcher, including its existing `ray_worker` validation-helper dependency. No gRPC, owner binding or conformance implementation. |
 | `kryvola_fabric_ray-VERSION-py3-none-any.whl` | Python 3.12.14 fixed Ray job entrypoint and metadata codec. No Temporal workflow or owner binding. |
 
 `packaging/m1.json` declares the role APIs. Install the role wheels in different
-environments: they intentionally provide disjoint subsets of the
+environments: they intentionally provide different subsets of the
 `kryvola_fabric` namespace and must never be co-installed. Hash-pinned
 `workflow.lock` and `ray.lock` include complete dependency resolutions. Use
 `uv pip sync --require-hashes --python ENV/bin/python ROLE.lock`, followed by
