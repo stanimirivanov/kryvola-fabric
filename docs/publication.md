@@ -77,7 +77,7 @@ No key-based mode is exposed by the publication CLI.
   (Apache-2.0) supplies signing/verification instead of custom cryptography.
   Both reuse the engines repository's reviewed tool versions/pins via standalone
   adapters; no sibling code is imported.
-- GitHub artifact upload/download actions are commit-pinned. Build artifacts are
+- GitHub artifact upload/download actions use major-version tags. Build artifacts are
   transport between jobs, not public release evidence until keyless verification.
 
 Creating this workflow does not publish a package. Publication is a separate
