@@ -535,6 +535,19 @@ mod tests {
     }
 
     #[test]
+    fn replay_window_allows_more_than_capacity_over_its_lifetime() {
+        let mut window = ReplayWindow::default();
+        // Logical milliseconds exercise multiple windows without a wall-clock wait.
+        for n in 0..(MAX_REDEEMED * 2) {
+            let now = n as u64 + 1;
+            let token = n.to_string();
+            assert_eq!(window.consume(token.clone(), now + 2, now), Ok(()));
+            assert_eq!(window.consume(token, now + 2, now), Err(Denial::Replay));
+            assert!(window.entries.len() <= 2);
+        }
+    }
+
+    #[test]
     fn grant_lifetime_is_positive_and_bounded_including_overflow() {
         assert!(!grant_live(10, 10));
         assert!(!grant_live(9, 10));
@@ -555,26 +568,36 @@ mod tests {
         let _cleanup = Cleanup(auth.path.clone());
         let workload: SpiffeId = "spiffe://fabric.test/worker".parse().unwrap();
         let scope = Scope::decode(br#"{"schema_version":"1","attempt":{"schema_version":"1","tenant_scope":"tenant","operation_id":"op","workflow_epoch":"1","attempt_epoch":"1","fence":"1"},"manifest_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","purpose":"COMPUTE_READ"}"#).unwrap();
-        for n in 0..=MAX_REDEEMED {
-            if n == MAX_REDEEMED {
-                std::thread::sleep(std::time::Duration::from_millis(1100));
-            }
-            let token = sha256_hex(&n.to_le_bytes());
-            let expiry = now_unix_ms().unwrap() + 1000;
-            std::fs::write(
-                &auth.path,
-                serde_json::json!({"boot_id":auth.boot_id(), "grants":[{
-                    "spiffe_id":workload.to_string(), "token_sha256":sha256_hex(token.as_bytes()),
-                    "scope":scope, "expires_unix_ms":expiry
-                }]})
-                .to_string(),
-            )
-            .unwrap();
-            assert_eq!(
-                auth.redeem(&workload, &token, &scope),
-                Some(expiry),
-                "expired redemptions must not cause a lifetime cutoff"
-            );
+        // Seed a full window whose entries expired long before the fresh grant.
+        // Capacity recovery must not depend on sleeps or thousands of policy writes.
+        {
+            let mut window = auth.redeemed.lock().unwrap();
+            window.entries = (0..MAX_REDEEMED)
+                .map(|n| (sha256_hex(&n.to_le_bytes()), 1))
+                .collect();
+            window.high_water = 1;
+            assert_eq!(window.entries.len(), MAX_REDEEMED);
         }
+        let token = sha256_hex(b"fresh grant");
+        let expiry = now_unix_ms().unwrap() + MAX_TTL_MS;
+        std::fs::write(
+            &auth.path,
+            serde_json::json!({"boot_id":auth.boot_id(), "grants":[{
+                "spiffe_id":workload.to_string(), "token_sha256":sha256_hex(token.as_bytes()),
+                "scope":scope, "expires_unix_ms":expiry
+            }]})
+            .to_string(),
+        )
+        .unwrap();
+        assert_eq!(
+            auth.redeem(&workload, &token, &scope),
+            Some(expiry),
+            "expired redemptions must not cause a lifetime cutoff"
+        );
+        assert_eq!(auth.redeemed.lock().unwrap().entries.len(), 1);
+        assert_eq!(
+            auth.try_redeem(&workload, &token, &scope),
+            Err(Denial::Replay)
+        );
     }
 }
