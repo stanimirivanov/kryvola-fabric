@@ -32,12 +32,16 @@ enter publication assets. Fast gates do not install these tools or start service
 uv sync --locked --extra conformance
 uv run --locked --extra conformance python tools/install_temporal.py
 uv run --locked --extra conformance python tools/install_release.py
+uv run --locked python tools/install_spire.py
 uv run --locked --extra conformance python tools/verify.py full
 ```
 
 These tool installers target Linux x86_64 CI. Offline tests run through the existing
 unittest harness, including `tests/test_release.py`. Qualification refuses existing
 output rather than overwriting a prior result; use a fresh checkout for a rerun.
+The SPIRE installer supplies the checksum-pinned server and agent used by the
+full gate's live workload authentication probes; both CI and release qualification
+must install them before running that gate.
 
 ## Manual publication and consumer trust
 
