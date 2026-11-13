@@ -214,6 +214,14 @@ async fn exact_release_transaction() {
     let registry = Registry::new(pool.clone());
     registry.migrate().await.unwrap();
     let (request, policy, approval) = fixture(&pool, 1, 1).await;
+    let key = OperationKey {
+        tenant_scope: "release-tenant",
+        operation_id: "release-op-1",
+    };
+    assert_eq!(
+        registry.public_status(key).await.unwrap().as_deref(),
+        Some("COMPUTE_SELECTED")
+    );
     let commit = |request: Value, policy: Value| {
         let registry = &registry;
         async move {
@@ -252,13 +260,39 @@ async fn exact_release_transaction() {
     );
     let decision = a.unwrap();
     assert_eq!(decision["outcome"], "RELEASED");
+    assert_eq!(
+        registry.public_status(key).await.unwrap().as_deref(),
+        Some("RELEASED"),
+        "the public lifecycle must expose the committed release"
+    );
     assert_eq!(decision, b.unwrap());
     let (replayed, replayed_policy, _) = fixture(&pool, 2, 1).await;
     assert_eq!(commit(replayed, replayed_policy).await.unwrap(), decision);
+    assert_eq!(
+        registry
+            .public_status(OperationKey {
+                tenant_scope: "release-tenant",
+                operation_id: "release-op-2",
+            })
+            .await
+            .unwrap()
+            .as_deref(),
+        Some("COMPUTE_SELECTED"),
+        "replaying a logical decision must not release another physical upload"
+    );
     let (next, next_policy, _) = fixture(&pool, 3, 3).await;
     assert_eq!(
         commit(next.clone(), next_policy.clone()).await,
         Err(RegistryError::IdempotencyConflict)
+    );
+    let changed = OperationKey {
+        tenant_scope: "release-tenant",
+        operation_id: "release-op-3",
+    };
+    assert_eq!(
+        registry.public_status(changed).await.unwrap().as_deref(),
+        Some("COMPUTE_SELECTED"),
+        "another output under the same disclosure identity remains unreleased"
     );
     let count: i64 = sqlx::query_scalar("SELECT count(*) FROM fabric_disclosure_decisions")
         .fetch_one(&pool)
@@ -280,6 +314,10 @@ async fn exact_release_transaction() {
     assert_eq!(
         commit(next, next_policy).await,
         Err(RegistryError::Cancelled)
+    );
+    assert_eq!(
+        registry.public_status(changed).await.unwrap().as_deref(),
+        Some("CANCELLED")
     );
 }
 
