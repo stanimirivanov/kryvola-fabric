@@ -20,15 +20,23 @@ from pathlib import Path
 import grpc
 from kryvola_fabric.control import decode_control
 
+def require_authority(context):
+    # Public invocation_metadata omits HTTP/2 pseudoheaders. Inspect the received
+    # C-core call details in this pinned-image protocol fixture, not client options.
+    if context._rpc_event.call_details.host != b"localhost":
+        context.abort(grpc.StatusCode.INTERNAL, "INVALID_RPC_AUTHORITY")
+
 servers = []
 for folder in Path("/run/kryvola/ray").iterdir():
     def execute(raw, context, folder=folder):
+        require_authority(context)
         assert raw == (folder / "execute.pb").read_bytes()
         with (folder / "starts").open("ab") as stream:
             stream.write(b"x")
         return b""
 
     def observe(raw, context, folder=folder):
+        require_authority(context)
         request = decode_control("GetExecutionStatusRequest", raw)
         response = (folder / "status.pb").read_bytes()
         observed = decode_control("GetExecutionStatusResponse", response)

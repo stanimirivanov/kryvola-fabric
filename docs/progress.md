@@ -721,3 +721,19 @@ inventory/provenance. Qualification executes installed binaries, Temporal
 retry/replay and the pinned Ray image without source mounts. M0 identities
 remain unchanged. Native owner crypto qualification, production provisioning
 and PR30 composition remain separate gates.
+
+## M1-PR33 prerequisite — native Ray Engine authority, issue #97
+
+Platform's published-artifact inference preflight found that the Ray worker sent
+an encoded Unix socket pathname as its HTTP/2 authority. The native Engine
+rejected the channel before returning a status reply; the same real-artifact
+probe worked with an explicit `localhost` authority. The worker now sets that
+channel option while preserving its Unix target, framing limit and disabled
+transport retries. The real-Ray protocol fixture checks the authority received
+by both RPC handlers, alongside its existing reattachment and distinct-output
+assertions. This is a transport correction, not inference qualification.
+
+[Platform #56](https://github.com/stanimirivanov/kryvola-platform/issues/56) remains
+blocked until this fix is merged, a new Fabric M1 release is published through
+the existing main-only workflow, and Platform admits its immutable pins. No
+release, crypto parameter, Engine image or schema pin changes in this fix.

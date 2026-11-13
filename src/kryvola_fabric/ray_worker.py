@@ -92,7 +92,11 @@ def execute(value, root):
     prefix = "/kryvola.spec.v1.EngineService/"
     with grpc.insecure_channel(
         f"unix:{root / 'engine.sock'}",
-        options=[("grpc.max_receive_message_length", 128 << 10), ("grpc.enable_retries", 0)],
+        options=[
+            ("grpc.default_authority", "localhost"),
+            ("grpc.max_receive_message_length", 128 << 10),
+            ("grpc.enable_retries", 0),
+        ],
     ) as channel:
         try:
             claim = (root / "started").open("xb")
