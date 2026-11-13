@@ -737,3 +737,23 @@ assertions. This is a transport correction, not inference qualification.
 blocked until this fix is merged, a new Fabric M1 release is published through
 the existing main-only workflow, and Platform admits its immutable pins. No
 release, crypto parameter, Engine image or schema pin changes in this fix.
+
+## M1-PR33 prerequisite — committed release status, issue #99
+
+The real published-artifact Platform qualification reached native CPU success,
+receipt persistence, selection and coordinator release, but the SDK's operation
+lookup still returned `COMPUTE_SELECTED`. The registry projection now exposes the
+existing `RELEASED` contract value only when the selected immutable upload and
+manifest have a committed authorization for that exact operation and workflow
+epoch. Real PostgreSQL coverage checks the pre-/post-commit transition, a
+same-digest logical-decision replay with a different physical upload, a different
+output under the same disclosure identity, and cancellation precedence.
+
+This is metadata about a committed decision. It grants no consumer capability
+and does not replace live expiry, revocation, recipient, signature or artifact
+checks on every read. Existing global disclosure-decision replay behavior is
+unchanged; replaying an earlier decision does not publish another operation's
+physical upload. No contract, migration, crypto or artifact pin changes here.
+Platform issue #56 requires this prerequisite to be merged, published through the
+main-only workflow, and admitted as a fresh verified release before qualification
+can continue through SDK result opening.

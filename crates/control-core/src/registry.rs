@@ -209,10 +209,20 @@ impl Registry {
             .transpose()
     }
 
-    /// Metadata projection only; selection does not authorize disclosure.
+    /// Metadata projection only; even RELEASED does not authorize an artifact read.
     pub async fn public_status(&self, key: OperationKey<'_>) -> Result<Option<String>> {
         sqlx::query_scalar("SELECT CASE
             WHEN EXISTS (SELECT 1 FROM fabric_operation_barriers b WHERE b.tenant_scope=o.tenant_scope AND b.operation_id=o.operation_id AND b.cancel_key IS NOT NULL) THEN 'CANCELLED'
+            WHEN EXISTS (
+                SELECT 1 FROM fabric_selected_results s
+                JOIN fabric_disclosure_decisions d ON d.output_upload_id=s.upload_id
+                JOIN fabric_finalized_artifacts a ON a.upload_id=s.upload_id
+                WHERE s.tenant_scope=o.tenant_scope AND s.operation_id=o.operation_id
+                  AND d.output_manifest_digest=a.manifest_digest
+                  AND (convert_from(d.canonical_authorization,'UTF8')::jsonb->>'tenant_scope')=o.tenant_scope
+                  AND (convert_from(d.canonical_authorization,'UTF8')::jsonb->>'operation_id')=o.operation_id
+                  AND (convert_from(d.canonical_authorization,'UTF8')::jsonb->>'workflow_epoch')=(o.intent->>'workflow_epoch')
+            ) THEN 'RELEASED'
             WHEN EXISTS (SELECT 1 FROM fabric_selected_results s WHERE s.tenant_scope=o.tenant_scope AND s.operation_id=o.operation_id) THEN 'COMPUTE_SELECTED'
             WHEN (intent->>'deadline_unix_ms')::numeric <= floor(extract(epoch FROM clock_timestamp())*1000) THEN 'EXPIRED'
             ELSE NULL END FROM fabric_operations o WHERE tenant_scope=$1 AND operation_id=$2")
