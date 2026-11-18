@@ -594,6 +594,28 @@ async fn bounded_uploads() {
         .finalize(permit(25, "worker"), &second_upload, &canonical)
         .await
         .unwrap();
+    for (execution, upload) in [(one.execution_id, &id), (two.execution_id, &second_upload)] {
+        sqlx::query(
+            "INSERT INTO fabric_execution_output_uploads
+             (tenant_scope,operation_id,execution_id,workload,manifest_digest,reserved_bytes,upload_id)
+             VALUES ($1,$2,$3,'worker',$4,4,$5)",
+        )
+        .bind(key.tenant_scope)
+        .bind(key.operation_id)
+        .bind(execution)
+        .bind(&artifact.manifest_digest)
+        .bind(upload)
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    assert_eq!(
+        registry
+            .select_result(key, one, &second_upload, &artifact.manifest_digest)
+            .await,
+        Err(RegistryError::CandidateMismatch)
+    );
+    assert_eq!(registry.selected_result(key).await.unwrap(), None);
     let (a, b) = tokio::join!(
         registry.select_result(key, one, &id, &artifact.manifest_digest),
         registry.select_result(key, two, &second_upload, &artifact.manifest_digest),

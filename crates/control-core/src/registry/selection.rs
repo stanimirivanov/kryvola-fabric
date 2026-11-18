@@ -203,11 +203,15 @@ impl Registry {
         });
         let upload_id: String = sqlx::query_scalar(
             "SELECT u.id FROM fabric_finalized_artifacts a JOIN fabric_uploads u ON u.id = a.upload_id
+             LEFT JOIN fabric_execution_output_uploads o ON o.upload_id = u.id
              WHERE ($1::text IS NULL OR u.id = $1) AND u.tenant_scope = $2
                AND a.manifest_digest = $3 AND u.scope @> $4 AND NOT u.reclaiming
                AND convert_from(a.canonical_manifest, 'UTF8')::jsonb->>'key_context_digest' = $5
+               AND (o.upload_id IS NULL OR
+                    (o.tenant_scope = $2 AND o.operation_id = $6 AND o.execution_id = $7))
              ORDER BY u.id LIMIT 1 FOR UPDATE OF u",
         ).bind(upload_id).bind(key.tenant_scope).bind(manifest_digest).bind(Json(scope)).bind(context)
+            .bind(key.operation_id).bind(target.execution_id)
             .fetch_optional(&mut *tx).await?.ok_or(RegistryError::CandidateMismatch)?;
         let result = SelectedResult {
             execution_id: target.execution_id.to_owned(),

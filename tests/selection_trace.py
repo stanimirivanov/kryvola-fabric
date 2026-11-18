@@ -215,6 +215,14 @@ def exercise(case, request, issue, sql, operation, scope, coordinator, authorize
             200,
         )
         uploads[execution] = upload
+        # Native output reservation records this immutable ownership binding.
+        sql(
+            "INSERT INTO fabric_execution_output_uploads "
+            "(tenant_scope,operation_id,execution_id,workload,manifest_digest,"
+            "reserved_bytes,upload_id) "
+            f"SELECT tenant_scope,'selection-http','{execution}',certificate,'{digest}',4,id "
+            f"FROM fabric_uploads WHERE id='{upload}'"
+        )
         observe(f"complete:{execution}", "COMPLETED")
 
     def expire(epoch):
@@ -249,8 +257,11 @@ def exercise(case, request, issue, sql, operation, scope, coordinator, authorize
     # Identical digest on the previous attempt is insufficient.
     case.assertEqual(select("2-1", token)[0], 409)
     observe("select:2-1", "REJECTED")
-    for execution in ("2-1", "2-2"):
-        complete(execution)
+    complete("2-1")
+    # A matching digest from another execution must not make this one complete.
+    case.assertEqual(select("2-2", token)[0], 409)
+    observe("select:2-2", "REJECTED")
+    complete("2-2")
     case.assertEqual(select("2-1", token, output_manifest_digest="e" * 64)[0], 409)
     # Simulate wrong-context storage metadata while keeping the request digest unchanged.
     sql(
@@ -274,9 +285,7 @@ def exercise(case, request, issue, sql, operation, scope, coordinator, authorize
     winner = next(e for e, result in results.items() if result[0] == 200)
     loser = next(e for e in results if e != winner)
     pinned = rows(f"SELECT execution_id, upload_id FROM fabric_selected_results WHERE {key}")
-    case.assertEqual(
-        pinned, [{"execution_id": winner, "upload_id": min(uploads["2-1"], uploads["2-2"])}]
-    )
+    case.assertEqual(pinned, [{"execution_id": winner, "upload_id": uploads[winner]}])
     case.assertEqual(
         sql(f"SELECT count(*) FROM fabric_outbox WHERE {key} AND kind='result_selected'").strip(),
         "1",
@@ -319,6 +328,7 @@ def exercise(case, request, issue, sql, operation, scope, coordinator, authorize
     # The fixture owns this isolated database and bucket. Remove quota rows for later probes.
     sql(
         f"DELETE FROM fabric_outbox WHERE {key}; DELETE FROM fabric_selected_results WHERE {key}; "
+        f"DELETE FROM fabric_execution_output_uploads WHERE {key}; "
         "DELETE FROM fabric_finalized_artifacts WHERE upload_id IN (SELECT id FROM fabric_uploads "
         "WHERE scope->'attempt'->>'operation_id'='selection-http'); "
         "DELETE FROM fabric_uploads WHERE scope->'attempt'->>'operation_id'='selection-http'"
