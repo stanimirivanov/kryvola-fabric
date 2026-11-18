@@ -757,3 +757,21 @@ physical upload. No contract, migration, crypto or artifact pin changes here.
 Platform issue #56 requires this prerequisite to be merged, published through the
 main-only workflow, and admitted as a fresh verified release before qualification
 can continue through SDK result opening.
+
+## M1-PR36-R3 prerequisite — execution-bound selection, issue #101
+
+Identical manifests from two physical executions previously let digest-based
+selection attach the lowest upload ID to the requested execution, even when that
+upload belonged to the other execution. Receipt/upload verification then correctly
+rejected release. This caused intermittent duplicate-notification qualification
+failures despite successful native work. Selection now honors immutable
+`fabric_execution_output_uploads` ownership for both digest and explicit-upload
+paths. Legacy coordinator-attested uploads without such a binding retain their
+existing behavior; fencing, cancellation, replay and release validation remain.
+
+Real HTTP/state-oracle and SQL tests cover rejection before the requested
+execution has produced output, identical-digest races, and explicit substitution.
+No schema or migration is required. Existing incorrect selections are not
+rewritten; disposable development runs need fresh operation/fixture state.
+Platform #66 / PR #67 needs this fix merged, published via the main-only Fabric
+release workflow, verified and repinned before notification qualification resumes.
